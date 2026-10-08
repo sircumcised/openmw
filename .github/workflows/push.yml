@@ -9,6 +9,8 @@ env:
 
 jobs:
   Ubuntu:
+    # The upstream build matrix is not needed in this fork (see nmcoop.yml).
+    if: github.repository == 'OpenMW/openmw'
     runs-on: ubuntu-latest
 
     steps:
@@ -67,6 +69,7 @@ jobs:
     #     name: build_artifact.7z
 
   MacOS:
+    if: github.repository == 'OpenMW/openmw'
     strategy:
       fail-fast: true
       matrix:
@@ -78,6 +81,7 @@ jobs:
       image: ${{ matrix.args.image }}
 
   Windows:
+    if: github.repository == 'OpenMW/openmw'
     strategy:
       fail-fast: true
       matrix:

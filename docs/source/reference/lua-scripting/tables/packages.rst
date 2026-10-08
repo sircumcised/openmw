@@ -41,6 +41,9 @@
    * - :doc:`nearby </reference/lua-scripting/openmw_nearby>`
      - |bdg-ctx-local|
      - Read-only access to the nearest area of the game world.
+   * - :doc:`net </reference/lua-scripting/openmw_net>`
+     - |bdg-ctx-global| |bdg-ctx-menu|
+     - Message transport between game instances (one host, several clients).
    * - :doc:`postprocessing </reference/lua-scripting/openmw_postprocessing>`
      - |bdg-ctx-player|
      - Controls post-process shaders.

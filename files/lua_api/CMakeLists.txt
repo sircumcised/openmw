@@ -21,6 +21,7 @@ set(LUA_API_FILES
     openmw/markup.lua
     openmw/menu.lua
     openmw/nearby.lua
+    openmw/net.lua
     openmw/postprocessing.lua
     openmw/self.lua
     openmw/storage.lua

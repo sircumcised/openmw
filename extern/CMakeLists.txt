@@ -188,6 +188,22 @@ endif()
 
 add_subdirectory(smhasher)
 
+# ENet: reliable UDP transport behind the Lua package openmw.net.
+# Always built from source and linked statically, so every player runs exactly the same network code.
+# v1.3.18
+include(FetchContent)
+FetchContent_Declare(enet
+    GIT_REPOSITORY https://github.com/lsalzman/enet.git
+    GIT_TAG 2662c0de09e36f2a2030ccc2c528a3e4c9e8138a
+    SOURCE_DIR fetched/enet
+)
+FetchContent_MakeAvailable(enet)
+target_include_directories(enet PUBLIC ${enet_SOURCE_DIR}/include)
+if(WIN32)
+    # Plain signature, like the one ENet's own CMakeLists uses for MinGW: the two can not be mixed.
+    target_link_libraries(enet ws2_32 winmm)
+endif()
+
 if (BUILD_BENCHMARKS AND NOT OPENMW_USE_SYSTEM_BENCHMARK)
 
     set(BENCHMARK_ENABLE_TESTING OFF)

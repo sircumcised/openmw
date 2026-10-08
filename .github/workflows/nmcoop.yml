@@ -1,0 +1,47 @@
+# NerevarMoon Coop: builds the Windows game with the Lua package openmw.net.
+#
+# Run it by pushing a tag named nmcoop-* (works from any branch), or by hand from the Actions tab
+# (only offered when this file is on the default branch of the repository).
+# The result is the artifact "openmw-windows-2022-<commit>" of the run: a complete, portable
+# OpenMW folder. A tag also publishes it as a release, so it can be downloaded without a GitHub account.
+name: NerevarMoon Coop
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-type:
+        description: Release is what official builds use. RelWithDebInfo is the configuration upstream builds on every push (slower game, safest build).
+        type: choice
+        default: Release
+        options:
+        - Release
+        - RelWithDebInfo
+  push:
+    tags:
+      - nmcoop-**
+
+jobs:
+  Windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      image: "2022"
+      build-type: ${{ inputs.build-type || 'Release' }}
+
+  Release:
+    if: startsWith(github.ref, 'refs/tags/nmcoop-')
+    needs: Windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v6
+      with:
+        name: openmw-windows-2022-${{ github.sha }}
+        path: OpenMW-Coop
+
+    - name: Pack
+      run: zip -r -q "OpenMW-Coop-${{ github.ref_name }}-win64.zip" OpenMW-Coop
+
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: OpenMW-Coop-${{ github.ref_name }}-win64.zip

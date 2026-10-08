@@ -1,5 +1,7 @@
 #include "serialization.hpp"
 
+#include <cmath>
+
 #include <osg/Matrixf>
 #include <osg/Quat>
 #include <osg/Vec2f>
@@ -235,8 +237,12 @@ namespace LuaUtil
             throw std::runtime_error("Unknown Lua type.");
     }
 
-    static void deserializeImpl(
-        lua_State* lua, std::string_view& binaryData, const UserdataSerializer* customSerializer, bool readOnly)
+    // The serializer refuses more than 32 nested tables. Deserialized data may come from outside (a network
+    // peer), so the same limit is enforced here instead of recursing as deep as the data asks for.
+    constexpr int sMaxDeserializationDepth = 32;
+
+    static void deserializeImpl(lua_State* lua, std::string_view& binaryData,
+        const UserdataSerializer* customSerializer, bool readOnly, int recursionCounter = 0)
     {
         if (binaryData.empty())
             throw std::runtime_error("Unexpected end of serialized data.");
@@ -286,11 +292,16 @@ namespace LuaUtil
             }
             case SerializedType::TABLE_START:
             {
+                if (recursionCounter >= sMaxDeserializationDepth)
+                    throw std::runtime_error("Can not deserialize more than 32 nested tables.");
                 lua_createtable(lua, 0, 0);
                 while (!binaryData.empty() && binaryData[0] != char(SerializedType::TABLE_END))
                 {
-                    deserializeImpl(lua, binaryData, customSerializer, readOnly);
-                    deserializeImpl(lua, binaryData, customSerializer, readOnly);
+                    deserializeImpl(lua, binaryData, customSerializer, readOnly, recursionCounter + 1);
+                    // Lua raises its own kind of error on such a key, which callers do not expect here.
+                    if (lua_type(lua, -1) == LUA_TNUMBER && std::isnan(lua_tonumber(lua, -1)))
+                        throw std::runtime_error("Table key can not be NaN in serialized data.");
+                    deserializeImpl(lua, binaryData, customSerializer, readOnly, recursionCounter + 1);
                     lua_settable(lua, -3);
                 }
                 if (binaryData.empty())

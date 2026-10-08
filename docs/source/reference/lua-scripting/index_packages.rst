@@ -18,6 +18,7 @@ Packages
     markup <openmw_markup>
     menu <openmw_menu>
     nearby <openmw_nearby>
+    net <openmw_net>
     postprocessing <openmw_postprocessing>
     self <openmw_self>
     storage <openmw_storage>
