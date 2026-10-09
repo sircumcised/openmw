@@ -1,9 +1,9 @@
 # NerevarMoon Coop: builds the Windows game with the Lua package openmw.net.
 #
-# Run it by pushing a tag named nmcoop-* (works from any branch), or by hand from the Actions tab
-# (only offered when this file is on the default branch of the repository).
+# Runs on every push to the nmcoop branch, on tags named nmcoop-*, and by hand from the Actions tab
+# (the latter is only offered when this file is on the default branch of the repository).
 # The result is the artifact "openmw-windows-2022-<commit>" of the run: a complete, portable
-# OpenMW folder. A tag also publishes it as a release, so it can be downloaded without a GitHub account.
+# OpenMW folder. It is also published as a release, so it can be downloaded without a GitHub account.
 name: NerevarMoon Coop
 
 on:
@@ -17,6 +17,8 @@ on:
         - Release
         - RelWithDebInfo
   push:
+    branches:
+      - nmcoop
     tags:
       - nmcoop-**
 
@@ -28,11 +30,13 @@ jobs:
       build-type: ${{ inputs.build-type || 'Release' }}
 
   Release:
-    if: startsWith(github.ref, 'refs/tags/nmcoop-')
     needs: Windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # A pushed tag names the release; any other run gets a numbered one.
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('nmcoop-build-{0}', github.run_number) }}
     steps:
     - uses: actions/download-artifact@v6
       with:
@@ -40,8 +44,12 @@ jobs:
         path: OpenMW-Coop
 
     - name: Pack
-      run: zip -r -q "OpenMW-Coop-${{ github.ref_name }}-win64.zip" OpenMW-Coop
+      run: zip -r -q "OpenMW-Coop-${RELEASE_TAG}-win64.zip" OpenMW-Coop
 
     - uses: softprops/action-gh-release@v2
       with:
-        files: OpenMW-Coop-${{ github.ref_name }}-win64.zip
+        tag_name: ${{ env.RELEASE_TAG }}
+        target_commitish: ${{ github.sha }}
+        name: OpenMW Coop ${{ env.RELEASE_TAG }}
+        body: OpenMW 0.51.0 with the Lua package openmw.net (NerevarMoon Coop). Unzip anywhere and run openmw.exe from that folder.
+        files: OpenMW-Coop-${{ env.RELEASE_TAG }}-win64.zip
