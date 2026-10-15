@@ -39,6 +39,8 @@ namespace SceneUtil
             float mRadius = 1.f; // particle radius against colliders
             bool mWorld = true; // collide with the world (floor, walls) through the engine's ray hook
             float mMaxSpeed = 2000.f; // units per second a particle may move: caps whipping after fast turns
+            float mTipMass = 1.f; // mass of the end particle relative to a link: a heavy ball pulls the chain straight
+            int mIterations = 1; // constraint passes per step (3-4 when the tip is heavy)
         };
         struct Collider
         {

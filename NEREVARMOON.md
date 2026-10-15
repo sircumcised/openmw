@@ -28,7 +28,10 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   in fixed 120 Hz steps (at most 4 per frame; damping and elasticity are per step), colliders and world
   rays evaluated once per frame.
   Format: `chains: [{bones: [...], tip: [x,y,z], damping, elasticity, stiffness, gravity, inertia,
-  radius}]`, `colliders: [{bone, radius, offset: [x,y,z], end: [x,y,z]}]`. Pilot: the Iron Flail chain
+  radius, world, maxSpeed, tipMass, iterations}]`, `colliders: [{bone, radius, offset: [x,y,z], end:
+  [x,y,z]}]`. Link lengths are solved by mass (joint fixed, links 1, tip `tipMass`) over `iterations`
+  passes, so a heavy ball pulls the chain straight; the kinematic joint is interpolated across the
+  steps of a frame and `inertia` moves position and previous position together (no added velocity). Pilot: the Iron Flail chain
   (`meshes/w/nm/w_nm_iron_flail.nif.physics.yaml` in the Engine Test mod). World collision through a ray
   hook the physics system installs (`BonePhysicsController::setWorldRay`: floors, walls, doors; `world:
   false` per chain turns it off). `animation.getBoneTransform` and the new `animation.hasBonePhysics` also

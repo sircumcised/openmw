@@ -110,6 +110,8 @@ namespace SceneUtil
             if (it["world"])
                 chain.mWorld = it["world"].as<bool>();
             chain.mMaxSpeed = readClamped(it["maxSpeed"], chain.mMaxSpeed, 10.f, 100000.f);
+            chain.mTipMass = readClamped(it["tipMass"], chain.mTipMass, 0.01f, 1000.f);
+            chain.mIterations = static_cast<int>(readClamped(it["iterations"], static_cast<float>(chain.mIterations), 1.f, 16.f));
             spec.mChains.push_back(std::move(chain));
         }
         if (root["colliders"])
@@ -359,10 +361,13 @@ namespace SceneUtil
         // hand motion at once, or the chain takes (steps x) the real speed
         mParticles[0].mPrev = mParticles[0].mPos;
         mParticles[0].mPos = rootPos;
+        const std::size_t n = mNodes.size();
         osg::Quat parentRot = mountRot;
         const float keep = 1.f - mChain.mDamping;
         const float maxStep = mChain.mMaxSpeed * sStepDt;
-        for (std::size_t i = 0; i < mNodes.size(); ++i)
+
+        // 1. free motion of every particle (velocity, gravity, the mount's drag, pull to the rest pose)
+        for (std::size_t i = 0; i < n; ++i)
         {
             const osg::Quat animRot = mRestRot[i] * parentRot;
             const osg::Vec3f joint = mParticles[i].mPos;
@@ -395,12 +400,33 @@ namespace SceneUtil
                 dir = restDir;
             else
                 dir.normalize();
-            next.mPos = joint + dir * mRestLengths[i];
-
             osg::Quat delta;
             delta.makeRotate(restDir, dir);
             parentRot = animRot * delta;
         }
+
+        // 2. link lengths, shared by mass: the joint is fixed, links weigh 1, the tip weighs tipMass; several
+        //    passes let a heavy tip pull the whole chain straight instead of hanging off a limp rope
+        for (int pass = 0; pass < mChain.mIterations; ++pass)
+        {
+            for (std::size_t i = 0; i < n; ++i)
+            {
+                Particle& a = mParticles[i];
+                Particle& b = mParticles[i + 1];
+                const float wa = (i == 0) ? 0.f : 1.f;
+                const float wb = (i + 1 == n) ? 1.f / mChain.mTipMass : 1.f;
+                osg::Vec3f d = b.mPos - a.mPos;
+                const float len = d.length();
+                if (len < 1e-6f)
+                    continue;
+                const float error = len - mRestLengths[i];
+                d *= error / (len * (wa + wb));
+                a.mPos += d * wa;
+                b.mPos -= d * wb;
+            }
+        }
+        for (std::size_t i = 1; i <= n; ++i)
+            collide(mParticles[i].mPos, mChain.mRadius);
     }
 
     void BonePhysicsController::operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv)
