@@ -109,6 +109,7 @@ namespace SceneUtil
             chain.mRadius = readClamped(it["radius"], chain.mRadius, 0.f, 100.f);
             if (it["world"])
                 chain.mWorld = it["world"].as<bool>();
+            chain.mMaxSpeed = readClamped(it["maxSpeed"], chain.mMaxSpeed, 10.f, 100000.f);
             spec.mChains.push_back(std::move(chain));
         }
         if (root["colliders"])
@@ -352,10 +353,15 @@ namespace SceneUtil
     }
 
     void BonePhysicsController::integrate(
-        const osg::Quat& mountRot, const osg::Vec3f& gravityStep, const osg::Vec3f& dragStep)
+        const osg::Vec3f& rootPos, const osg::Quat& mountRot, const osg::Vec3f& gravityStep, const osg::Vec3f& dragStep)
     {
+        // the kinematic joint advances a fraction of the frame per step: a step must never see the whole frame's
+        // hand motion at once, or the chain takes (steps x) the real speed
+        mParticles[0].mPrev = mParticles[0].mPos;
+        mParticles[0].mPos = rootPos;
         osg::Quat parentRot = mountRot;
         const float keep = 1.f - mChain.mDamping;
+        const float maxStep = mChain.mMaxSpeed * sStepDt;
         for (std::size_t i = 0; i < mNodes.size(); ++i)
         {
             const osg::Quat animRot = mRestRot[i] * parentRot;
@@ -363,8 +369,12 @@ namespace SceneUtil
             const osg::Vec3f rest = joint + animRot * mRestOffsets[i];
             Particle& next = mParticles[i + 1];
 
-            const osg::Vec3f velocity = (next.mPos - next.mPrev) * keep;
-            next.mPrev = next.mPos;
+            osg::Vec3f velocity = (next.mPos - next.mPrev) * keep;
+            const float speed2 = velocity.length2();
+            if (speed2 > maxStep * maxStep)
+                velocity *= maxStep / std::sqrt(speed2);
+            // the mount's own motion moves the particle without becoming velocity (Dynamic Bone's inertia)
+            next.mPrev = next.mPos + dragStep;
             next.mPos += velocity + gravityStep + dragStep;
             if (mChain.mElasticity > 0.f)
                 next.mPos += (rest - next.mPos) * mChain.mElasticity;
@@ -462,18 +472,18 @@ namespace SceneUtil
         const osg::Vec3f dragStep = mountDelta * (mChain.mInertia / static_cast<float>(steps));
         updateColliders();
 
-        // the first joint follows the animation
-        {
-            const osg::Matrixf world = mRestLocal[0] * mount;
-            mParticles[0].mPrev = mParticles[0].mPos;
-            mParticles[0].mPos = world.getTrans();
-        }
+        // the first joint follows the animation, spread over the steps of this frame
+        const osg::Vec3f rootFrom = mParticles[0].mPos;
+        const osg::Vec3f rootTo = (mRestLocal[0] * mount).getTrans();
         mFrameStart.resize(mParticles.size());
         for (std::size_t i = 0; i < mParticles.size(); ++i)
             mFrameStart[i] = mParticles[i].mPos;
 
         for (int step = 0; step < steps; ++step)
-            integrate(mountRot, gravityStep, dragStep);
+        {
+            const float t = static_cast<float>(step + 1) / static_cast<float>(steps);
+            integrate(rootFrom + (rootTo - rootFrom) * t, mountRot, gravityStep, dragStep);
+        }
 
         // once per frame: the world (floors, walls), then the final link directions and the node matrices
         const bool world = mChain.mWorld && worldRay();

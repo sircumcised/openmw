@@ -35,9 +35,10 @@ namespace SceneUtil
             float mElasticity = 0.05f; // 0..1, pull towards the animated pose per frame
             float mStiffness = 0.f; // 0..1, how far from the animated pose the chain may bend
             float mGravity = 1.f; // multiple of the game gravity (627 units/s^2)
-            float mInertia = 1.f; // 0..1, share of the mount's motion the chain inherits (1 = full)
+            float mInertia = 0.5f; // 0..1, share of the mount's motion the chain follows at once (1 = rigid)
             float mRadius = 1.f; // particle radius against colliders
             bool mWorld = true; // collide with the world (floor, walls) through the engine's ray hook
+            float mMaxSpeed = 2000.f; // units per second a particle may move: caps whipping after fast turns
         };
         struct Collider
         {
@@ -98,7 +99,8 @@ namespace SceneUtil
         void updateColliders();
         void collide(osg::Vec3f& pos, float radius) const;
         void collideWorld(osg::Vec3f& pos, const osg::Vec3f& prev, float radius) const;
-        void integrate(const osg::Quat& mountRot, const osg::Vec3f& gravityStep, const osg::Vec3f& dragStep);
+        void integrate(const osg::Vec3f& rootPos, const osg::Quat& mountRot, const osg::Vec3f& gravityStep,
+            const osg::Vec3f& dragStep);
 
         BonePhysicsSpec::Chain mChain;
         std::vector<BonePhysicsSpec::Collider> mColliderSpecs;
