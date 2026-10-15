@@ -1931,6 +1931,67 @@ namespace MWRender
         mHeadController = addRotateController("bip01 head");
         mSpineController = addRotateController("bip01 spine1");
         mRootController = addRotateController("bip01");
+        for (auto& [bone, override] : mBoneOverrides)
+            attachBoneOverride(bone, override);
+    }
+
+    void Animation::attachBoneOverride(const std::string& bone, BoneOverride& override)
+    {
+        override.mController = addRotateController(bone);
+        if (!override.mController)
+            return;
+        override.mController->setRotate(override.mRotate);
+        override.mController->setOffset(override.mOffset);
+    }
+
+    std::optional<osg::Matrixf> Animation::getBoneWorldTransform(std::string_view bone) const
+    {
+        const osg::Node* node = getNode(bone);
+        if (!node)
+            return std::nullopt;
+        osg::NodePathList nodepaths = node->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        return osg::computeLocalToWorld(nodepaths[0]);
+    }
+
+    bool Animation::setBoneOverride(
+        std::string_view bone, std::optional<osg::Quat> rotate, std::optional<osg::Vec3f> offset)
+    {
+        const std::string key = Misc::StringUtils::lowerCase(bone);
+        auto it = mBoneOverrides.find(key);
+        if (it == mBoneOverrides.end())
+        {
+            if (!rotate && !offset)
+                return getNode(bone) != nullptr;
+            it = mBoneOverrides.emplace(key, BoneOverride{}).first;
+        }
+        BoneOverride& override = it->second;
+        override.mRotate = rotate.value_or(osg::Quat());
+        override.mOffset = offset.value_or(osg::Vec3f());
+        if (!rotate && !offset)
+        {
+            if (override.mController)
+                override.mController->setEnabled(false);
+            mBoneOverrides.erase(it);
+            return true;
+        }
+        if (!override.mController)
+            attachBoneOverride(key, override);
+        else
+        {
+            override.mController->setRotate(override.mRotate);
+            override.mController->setOffset(override.mOffset);
+        }
+        return override.mController != nullptr;
+    }
+
+    void Animation::clearBoneOverrides()
+    {
+        for (auto& [bone, override] : mBoneOverrides)
+            if (override.mController)
+                override.mController->setEnabled(false);
+        mBoneOverrides.clear();
     }
 
     osg::ref_ptr<RotateController> Animation::addRotateController(std::string_view bone)

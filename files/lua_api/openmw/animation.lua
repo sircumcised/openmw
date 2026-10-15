@@ -211,6 +211,33 @@
 -- @return #boolean 
 
 ---
+-- NerevarMoon: world transform of a bone as left by the last frame's update (one frame of latency).
+-- Works on any object with an animation. Returns nil if the bone does not exist.
+-- @function [parent=#animation] getBoneTransform
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @return openmw.util#Transform world transform of the bone, or nil
+-- @usage local t = animation.getBoneTransform(self, 'Weapon Bone')
+-- local tip = t:apply(util.vector3(0, 0, 60)) -- 60 units along the bone's z axis, in world space
+
+---
+-- NerevarMoon: apply a rotation and/or an offset on top of the animation of one bone, in the actor's local
+-- space (object root). The override stays until it is replaced or cleared, also across animation changes.
+-- Only bones driven by an animation controller can be overridden (the animation resets them every frame);
+-- others are ignored with a warning in the log. Deferred to the next frame. Only for self.
+-- @function [parent=#animation] setBoneOverride
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @param #table options nil clears the override; otherwise a table with optional `rotation` (#Transform) and `offset` (#Vector3)
+-- @usage animation.setBoneOverride(self, 'bip01 head', { rotation = util.transform.rotate(math.rad(30), util.vector3(0, 0, 1)) })
+-- animation.setBoneOverride(self, 'bip01 head', nil)
+
+---
+-- NerevarMoon: remove every bone override set with setBoneOverride. Only for self.
+-- @function [parent=#animation] clearBoneOverrides
+-- @param openmw.core#GameObject actor
+
+---
 -- Get the current active animation for a bone group
 -- @function [parent=#animation] getActiveGroup
 -- @param openmw.core#GameObject actor

@@ -9,6 +9,12 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   velocity change in game units per second, applied at the next physics step. Up = launched like a
   jump (landing sound and fall damage work as usual); in the air = added momentum; a horizontal push
   on the ground = a slide damped by friction (`MWPhysics::sSlideFriction`, gone in about 0.2 s).
+- `animation.getBoneTransform(object, bone)`: world transform (`util.transform`) of a bone, from the
+  last update (one frame behind). Any object with an animation; nil if the bone is missing.
+- `animation.setBoneOverride(self, bone, {rotation=, offset=} | nil)`: rotation/offset applied on top
+  of the animation in the actor's local space, kept across animation changes; nil clears it.
+  Bones without an animation controller are ignored (warning in the log).
+- `animation.clearBoneOverrides(self)`.
 
 ## Engine changes (all marked `NerevarMoon` in the code)
 - `mwphysics/actor.hpp`: `addImpulse`/`takeImpulse` (main thread), slide velocity.
@@ -17,3 +23,8 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
 - `mwphysics/movementsolver.cpp`: impulse applied (jump / air / slide), slide friction.
 - `mwbase/world.hpp`, `mwworld/worldimp.*`: `World::addActorImpulse`.
 - `mwlua/types/actor.cpp`, `files/lua_api/openmw/types.lua`: the binding and its documentation.
+- `mwrender/animation.hpp/.cpp`: `getBoneWorldTransform`, `setBoneOverride`, `clearBoneOverrides`;
+  one `RotateController` per overridden bone, recreated in `addControllers()` after every
+  `resetActiveGroups()`.
+- `mwlua/animationbindings.cpp`, `files/lua_api/openmw/animation.lua`: the bindings (writes deferred
+  with `addAction`, reads straight from the node matrices).
