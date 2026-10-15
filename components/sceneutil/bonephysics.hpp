@@ -39,8 +39,9 @@ namespace SceneUtil
             float mRadius = 1.f; // particle radius against colliders
             bool mWorld = true; // collide with the world (floor, walls) through the engine's ray hook
             float mMaxSpeed = 2000.f; // units per second a particle may move: caps whipping after fast turns
-            float mTipMass = 1.f; // mass of the end particle relative to a link: a heavy ball pulls the chain straight
-            int mIterations = 1; // constraint passes per step (3-4 when the tip is heavy)
+            float mTipMass = 1.f; // mass of the end particle in link masses: a heavy ball leads the chain
+            float mTipRadius = -1.f; // radius of the end particle against colliders (-1 = same as radius)
+            int mIterations = 3; // extra mass-weighted constraint passes per step (chain stays taut)
         };
         struct Collider
         {
@@ -100,6 +101,7 @@ namespace SceneUtil
         void resetState(const osg::Matrixf& mountWorld);
         void updateColliders();
         void collide(osg::Vec3f& pos, float radius) const;
+        float particleRadius(std::size_t index) const;
         void collideWorld(osg::Vec3f& pos, const osg::Vec3f& prev, float radius) const;
         void integrate(const osg::Vec3f& rootPos, const osg::Quat& mountRot, const osg::Vec3f& gravityStep,
             const osg::Vec3f& dragStep);

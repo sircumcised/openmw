@@ -9,6 +9,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <components/debug/debuglog.hpp>
+#include <components/misc/strings/algorithm.hpp>
 #include <components/vfs/manager.hpp>
 #include <components/vfs/pathutil.hpp>
 
@@ -111,7 +112,9 @@ namespace SceneUtil
                 chain.mWorld = it["world"].as<bool>();
             chain.mMaxSpeed = readClamped(it["maxSpeed"], chain.mMaxSpeed, 10.f, 100000.f);
             chain.mTipMass = readClamped(it["tipMass"], chain.mTipMass, 0.01f, 1000.f);
-            chain.mIterations = static_cast<int>(readClamped(it["iterations"], static_cast<float>(chain.mIterations), 1.f, 16.f));
+            chain.mTipRadius = readClamped(it["tipRadius"], chain.mTipRadius, -1.f, 100.f);
+            if (it["iterations"])
+                chain.mIterations = std::clamp(it["iterations"].as<int>(), 0, 16);
             spec.mChains.push_back(std::move(chain));
         }
         if (root["colliders"])
@@ -236,7 +239,8 @@ namespace SceneUtil
             mRestLengths.push_back(std::max(offset.length(), 1e-3f));
         mParticles.assign(n + 1, Particle{});
 
-        // colliders live on the surrounding skeleton, if any
+        // colliders: a node of the model itself (an ancestor of the chain, e.g. the haft) or a bone of the
+        // surrounding skeleton, if any
         if (!mColliderSpecs.empty())
         {
             osg::NodePathList paths = node->getParentalNodePaths();
@@ -250,21 +254,29 @@ namespace SceneUtil
                         break;
                 }
             }
-            if (skeleton != nullptr)
+            for (const BonePhysicsSpec::Collider& spec : mColliderSpecs)
             {
-                for (const BonePhysicsSpec::Collider& spec : mColliderSpecs)
+                osg::Node* found = nullptr;
+                if (!paths.empty())
+                {
+                    for (osg::Node* ancestor : paths[0])
+                        if (ancestor != node && Misc::StringUtils::ciEqual(ancestor->getName(), spec.mBone))
+                            found = ancestor;
+                }
+                if (found == nullptr && skeleton != nullptr)
                 {
                     FindByNameVisitor visitor(spec.mBone);
                     skeleton->accept(visitor);
-                    if (visitor.mFoundNode == nullptr)
-                        continue;
-                    ColliderInstance instance;
-                    instance.mNode = visitor.mFoundNode;
-                    instance.mRadius = spec.mRadius;
-                    instance.mOffset = spec.mOffset;
-                    instance.mEnd = spec.mEnd;
-                    mColliders.push_back(std::move(instance));
+                    found = visitor.mFoundNode;
                 }
+                if (found == nullptr)
+                    continue;
+                ColliderInstance instance;
+                instance.mNode = found;
+                instance.mRadius = spec.mRadius;
+                instance.mOffset = spec.mOffset;
+                instance.mEnd = spec.mEnd;
+                mColliders.push_back(std::move(instance));
             }
         }
         return true;
@@ -324,6 +336,13 @@ namespace SceneUtil
                 away /= dist;
             pos = closest + away * minDist;
         }
+    }
+
+    float BonePhysicsController::particleRadius(std::size_t index) const
+    {
+        if (index + 1 == mParticles.size() && mChain.mTipRadius >= 0.f)
+            return mChain.mTipRadius;
+        return mChain.mRadius;
     }
 
     void BonePhysicsController::setWorldRay(WorldRay ray)
@@ -391,7 +410,7 @@ namespace SceneUtil
                 if (bendLen > maxBend && bendLen > 1e-5f)
                     next.mPos = rest + bend * (maxBend / bendLen);
             }
-            collide(next.mPos, mChain.mRadius);
+            collide(next.mPos, particleRadius(i + 1));
 
             osg::Vec3f dir = next.mPos - joint;
             osg::Vec3f restDir = animRot * mRestOffsets[i];
@@ -426,7 +445,7 @@ namespace SceneUtil
             }
         }
         for (std::size_t i = 1; i <= n; ++i)
-            collide(mParticles[i].mPos, mChain.mRadius);
+            collide(mParticles[i].mPos, particleRadius(i));
     }
 
     void BonePhysicsController::operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv)

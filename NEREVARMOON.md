@@ -26,7 +26,10 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   rest pose, stiffness, capsule colliders on the wielder's skeleton bones). The chain nodes lose their
   keyframe controllers; the solver runs in the update traversal of the first bone, once per instance,
   in fixed 120 Hz steps (at most 4 per frame; damping and elasticity are per step), colliders and world
-  rays evaluated once per frame.
+  rays evaluated once per frame. `tipMass` (mass of the end particle in link masses, mass-weighted
+  constraints over `iterations` passes) makes a heavy ball lead the chain; `tipRadius` sizes it against
+  colliders; a collider's `bone` may name a node of the model itself (an ancestor of the chain, e.g. the
+  haft) as well as a skeleton bone.
   Format: `chains: [{bones: [...], tip: [x,y,z], damping, elasticity, stiffness, gravity, inertia,
   radius, world, maxSpeed, tipMass, iterations}]`, `colliders: [{bone, radius, offset: [x,y,z], end:
   [x,y,z]}]`. Link lengths are solved by mass (joint fixed, links 1, tip `tipMass`) over `iterations`
