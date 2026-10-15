@@ -24,7 +24,9 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
 - Bone physics (build 5): a file `<model>.physics.yaml` next to a model (any data directory, VFS path)
   puts the listed bone chains under a position-based solver (gravity, damping, elasticity towards the
   rest pose, stiffness, capsule colliders on the wielder's skeleton bones). The chain nodes lose their
-  keyframe controllers; the solver runs in the update traversal of the first bone, once per instance.
+  keyframe controllers; the solver runs in the update traversal of the first bone, once per instance,
+  in fixed 120 Hz steps (at most 4 per frame; damping and elasticity are per step), colliders and world
+  rays evaluated once per frame.
   Format: `chains: [{bones: [...], tip: [x,y,z], damping, elasticity, stiffness, gravity, inertia,
   radius}]`, `colliders: [{bone, radius, offset: [x,y,z], end: [x,y,z]}]`. Pilot: the Iron Flail chain
   (`meshes/w/nm/w_nm_iron_flail.nif.physics.yaml` in the Engine Test mod). World collision through a ray

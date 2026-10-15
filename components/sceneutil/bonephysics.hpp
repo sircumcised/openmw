@@ -95,8 +95,10 @@ namespace SceneUtil
 
         bool resolve(osg::MatrixTransform* node);
         void resetState(const osg::Matrixf& mountWorld);
+        void updateColliders();
         void collide(osg::Vec3f& pos, float radius) const;
         void collideWorld(osg::Vec3f& pos, const osg::Vec3f& prev, float radius) const;
+        void integrate(const osg::Quat& mountRot, const osg::Vec3f& gravityStep, const osg::Vec3f& dragStep);
 
         BonePhysicsSpec::Chain mChain;
         std::vector<BonePhysicsSpec::Collider> mColliderSpecs;
@@ -107,11 +109,21 @@ namespace SceneUtil
         bool mBroken = false;
         std::vector<osg::observer_ptr<osg::MatrixTransform>> mNodes;
         std::vector<osg::Matrixf> mRestLocal; // the bones' own (unsimulated) local matrices
+        std::vector<osg::Quat> mRestRot; // rotation part of mRestLocal, decomposed once
         std::vector<osg::Vec3f> mRestOffsets; // offset of particle i+1 in bone i's space
         std::vector<float> mRestLengths;
         std::vector<Particle> mParticles; // size = bones + 1
         std::vector<ColliderInstance> mColliders;
+        struct ColliderWorld
+        {
+            osg::Vec3f mA;
+            osg::Vec3f mB;
+            float mRadius;
+        };
+        std::vector<ColliderWorld> mColliderWorld; // this frame's capsules
+        std::vector<osg::Vec3f> mFrameStart; // particle positions at the start of the frame (world rays)
         double mLastTime = -1.0;
+        float mAccum = 0.f; // time waiting for the next fixed step
         osg::Vec3f mLastMount;
     };
 }

@@ -22,6 +22,8 @@ namespace SceneUtil
         constexpr float sGravityUnits = 8.96f * 69.99125109f; // Constants::GravityConst * UnitsPerMeter
         constexpr float sMaxDt = 0.05f;
         constexpr float sTeleportDistance = 150.f;
+        constexpr float sStepDt = 1.f / 120.f; // fixed solver step: the chain behaves the same at any frame rate
+        constexpr int sMaxSteps = 4;
 
         BonePhysicsController::WorldRay& worldRay()
         {
@@ -193,6 +195,7 @@ namespace SceneUtil
     {
         mNodes.clear();
         mRestLocal.clear();
+        mRestRot.clear();
         mRestOffsets.clear();
         mRestLengths.clear();
         mColliders.clear();
@@ -210,7 +213,10 @@ namespace SceneUtil
         }
         const std::size_t n = mNodes.size();
         for (std::size_t i = 0; i < n; ++i)
+        {
             mRestLocal.push_back(mNodes[i]->getMatrix());
+            mRestRot.push_back(mRestLocal.back().getRotate());
+        }
         for (std::size_t i = 0; i + 1 < n; ++i)
             mRestOffsets.push_back(mRestLocal[i + 1].getTrans());
         osg::Vec3f tip;
@@ -277,8 +283,9 @@ namespace SceneUtil
         mParticles.back().mPrev = tip;
     }
 
-    void BonePhysicsController::collide(osg::Vec3f& pos, float radius) const
+    void BonePhysicsController::updateColliders()
     {
+        mColliderWorld.clear();
         for (const ColliderInstance& collider : mColliders)
         {
             osg::ref_ptr<osg::Node> node;
@@ -288,26 +295,31 @@ namespace SceneUtil
             if (paths.empty())
                 continue;
             const osg::Matrixf world = osg::computeLocalToWorld(paths[0]);
-            const osg::Vec3f a = collider.mOffset * world;
-            const osg::Vec3f b = collider.mEnd * world;
+            mColliderWorld.push_back({ collider.mOffset * world, collider.mEnd * world, collider.mRadius });
+        }
+    }
+
+    void BonePhysicsController::collide(osg::Vec3f& pos, float radius) const
+    {
+        for (const ColliderWorld& collider : mColliderWorld)
+        {
             // closest point on the segment a-b
-            const osg::Vec3f ab = b - a;
+            const osg::Vec3f ab = collider.mB - collider.mA;
             float t = 0.f;
             const float ab2 = ab.length2();
             if (ab2 > 1e-6f)
-                t = std::clamp(((pos - a) * ab) / ab2, 0.f, 1.f);
-            const osg::Vec3f closest = a + ab * t;
+                t = std::clamp(((pos - collider.mA) * ab) / ab2, 0.f, 1.f);
+            const osg::Vec3f closest = collider.mA + ab * t;
             osg::Vec3f away = pos - closest;
             const float minDist = collider.mRadius + radius;
+            if (away.length2() >= minDist * minDist)
+                continue;
             const float dist = away.length();
-            if (dist < minDist)
-            {
-                if (dist < 1e-4f)
-                    away = osg::Vec3f(0.f, 0.f, 1.f);
-                else
-                    away /= dist;
-                pos = closest + away * minDist;
-            }
+            if (dist < 1e-4f)
+                away = osg::Vec3f(0.f, 0.f, 1.f);
+            else
+                away /= dist;
+            pos = closest + away * minDist;
         }
     }
 
@@ -336,6 +348,48 @@ namespace SceneUtil
                 pos.z() = std::max(pos.z(), hitPos.z() + radius);
             else
                 pos = hitPos + hitNormal * radius;
+        }
+    }
+
+    void BonePhysicsController::integrate(
+        const osg::Quat& mountRot, const osg::Vec3f& gravityStep, const osg::Vec3f& dragStep)
+    {
+        osg::Quat parentRot = mountRot;
+        const float keep = 1.f - mChain.mDamping;
+        for (std::size_t i = 0; i < mNodes.size(); ++i)
+        {
+            const osg::Quat animRot = mRestRot[i] * parentRot;
+            const osg::Vec3f joint = mParticles[i].mPos;
+            const osg::Vec3f rest = joint + animRot * mRestOffsets[i];
+            Particle& next = mParticles[i + 1];
+
+            const osg::Vec3f velocity = (next.mPos - next.mPrev) * keep;
+            next.mPrev = next.mPos;
+            next.mPos += velocity + gravityStep + dragStep;
+            if (mChain.mElasticity > 0.f)
+                next.mPos += (rest - next.mPos) * mChain.mElasticity;
+            if (mChain.mStiffness > 0.f)
+            {
+                const osg::Vec3f bend = next.mPos - rest;
+                const float maxBend = mRestLengths[i] * (1.f - mChain.mStiffness);
+                const float bendLen = bend.length();
+                if (bendLen > maxBend && bendLen > 1e-5f)
+                    next.mPos = rest + bend * (maxBend / bendLen);
+            }
+            collide(next.mPos, mChain.mRadius);
+
+            osg::Vec3f dir = next.mPos - joint;
+            osg::Vec3f restDir = animRot * mRestOffsets[i];
+            restDir.normalize();
+            if (dir.length2() < 1e-8f)
+                dir = restDir;
+            else
+                dir.normalize();
+            next.mPos = joint + dir * mRestLengths[i];
+
+            osg::Quat delta;
+            delta.makeRotate(restDir, dir);
+            parentRot = animRot * delta;
         }
     }
 
@@ -392,9 +446,21 @@ namespace SceneUtil
             return;
         }
 
-        const osg::Vec3f gravity(0.f, 0.f, -sGravityUnits * mChain.mGravity * dt * dt);
-        const osg::Vec3f drag = mountDelta * mChain.mInertia;
-        osg::Quat parentRot = mount.getRotate();
+        // fixed 120 Hz steps, at most 4 per frame: a hitch slows the chain down instead of launching it
+        mAccum += dt;
+        int steps = static_cast<int>(mAccum / sStepDt);
+        if (steps <= 0)
+        {
+            traverse(node, nv);
+            return;
+        }
+        steps = std::min(steps, sMaxSteps);
+        mAccum = std::min(mAccum - steps * sStepDt, sStepDt);
+
+        const osg::Quat mountRot = mount.getRotate();
+        const osg::Vec3f gravityStep(0.f, 0.f, -sGravityUnits * mChain.mGravity * sStepDt * sStepDt);
+        const osg::Vec3f dragStep = mountDelta * (mChain.mInertia / static_cast<float>(steps));
+        updateColliders();
 
         // the first joint follows the animation
         {
@@ -402,7 +468,16 @@ namespace SceneUtil
             mParticles[0].mPrev = mParticles[0].mPos;
             mParticles[0].mPos = world.getTrans();
         }
+        mFrameStart.resize(mParticles.size());
+        for (std::size_t i = 0; i < mParticles.size(); ++i)
+            mFrameStart[i] = mParticles[i].mPos;
 
+        for (int step = 0; step < steps; ++step)
+            integrate(mountRot, gravityStep, dragStep);
+
+        // once per frame: the world (floors, walls), then the final link directions and the node matrices
+        const bool world = mChain.mWorld && worldRay();
+        osg::Quat parentRot = mountRot;
         for (std::size_t i = 0; i < mNodes.size(); ++i)
         {
             osg::ref_ptr<osg::MatrixTransform> boneNode;
@@ -411,31 +486,15 @@ namespace SceneUtil
                 mBroken = true;
                 break;
             }
-            osg::Matrixf local = mRestLocal[i];
-            const osg::Quat animRot = local.getRotate() * parentRot;
+            const osg::Quat animRot = mRestRot[i] * parentRot;
             const osg::Vec3f joint = mParticles[i].mPos;
-            const osg::Vec3f rest = joint + animRot * mRestOffsets[i];
             Particle& next = mParticles[i + 1];
+            if (world)
+                collideWorld(next.mPos, mFrameStart[i + 1], mChain.mRadius);
 
-            const osg::Vec3f velocity = (next.mPos - next.mPrev) * (1.f - mChain.mDamping);
-            next.mPrev = next.mPos;
-            next.mPos += velocity + gravity + drag;
-            next.mPos += (rest - next.mPos) * mChain.mElasticity;
-            if (mChain.mStiffness > 0.f)
-            {
-                const osg::Vec3f bend = next.mPos - rest;
-                const float maxBend = mRestLengths[i] * (1.f - mChain.mStiffness);
-                const float bendLen = bend.length();
-                if (bendLen > maxBend && bendLen > 1e-5f)
-                    next.mPos = rest + bend * (maxBend / bendLen);
-            }
-            collide(next.mPos, mChain.mRadius);
-            if (mChain.mWorld)
-                collideWorld(next.mPos, next.mPrev, mChain.mRadius);
-
-            osg::Vec3f dir = next.mPos - joint;
             osg::Vec3f restDir = animRot * mRestOffsets[i];
             restDir.normalize();
+            osg::Vec3f dir = next.mPos - joint;
             if (dir.length2() < 1e-8f)
                 dir = restDir;
             else
@@ -445,6 +504,7 @@ namespace SceneUtil
             osg::Quat delta;
             delta.makeRotate(restDir, dir);
             const osg::Quat newRot = animRot * delta;
+            osg::Matrixf local = mRestLocal[i];
             local.setRotate(newRot * parentRot.inverse());
             setBoneMatrix(boneNode.get(), local);
             parentRot = newRot;
