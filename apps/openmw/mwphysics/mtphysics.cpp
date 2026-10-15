@@ -169,6 +169,7 @@ namespace
         struct InitPosition
         {
             const btCollisionWorld* mCollisionWorld;
+            const bool mWillAdvance; // NerevarMoon: a frame without a physics step must not consume the impulse
             void operator()(MWPhysics::ActorSimulation& sim) const
             {
                 auto locked = sim.lock();
@@ -189,7 +190,7 @@ namespace
                 const auto rotation = actor->getPtr().getRefData().getPosition().asRotationVec3();
                 frameData.mRotation = osg::Vec2f(rotation.x(), rotation.z());
                 frameData.mInertia = actor->getInertialForce();
-                frameData.mImpulse = actor->takeImpulse(); // NerevarMoon
+                frameData.mImpulse = mWillAdvance ? actor->takeImpulse() : osg::Vec3f(); // NerevarMoon
                 frameData.mSlide = actor->getSlideVelocity(); // NerevarMoon
                 frameData.mStuckFrames = actor->getStuckFrames();
                 frameData.mLastStuckPosition = actor->getLastStuckPosition();
@@ -542,7 +543,7 @@ namespace MWPhysics
         timeAccum -= numSteps * newDelta;
 
         // init
-        const Visitors::InitPosition vis{ mCollisionWorld };
+        const Visitors::InitPosition vis{ mCollisionWorld, numSteps != 0 };
         for (auto& sim : simulations)
         {
             std::visit(vis, sim);
