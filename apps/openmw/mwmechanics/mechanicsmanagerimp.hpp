@@ -233,6 +233,7 @@ namespace MWMechanics
             const MWWorld::Ptr& player, const MWWorld::Ptr& item, const MWWorld::Ptr& victim, int count) override;
 
         bool isAttackPreparing(const MWWorld::Ptr& ptr) override;
+        bool cancelAttack(const MWWorld::Ptr& ptr) override; // NerevarMoon
         bool isRunning(const MWWorld::Ptr& ptr) override;
         bool isSneaking(const MWWorld::Ptr& ptr) override;
 

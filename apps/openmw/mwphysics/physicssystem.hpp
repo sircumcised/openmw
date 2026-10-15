@@ -251,7 +251,8 @@ namespace MWPhysics
         void queueObjectMovement(const MWWorld::Ptr& ptr, const osg::Vec3f& velocity);
 
         /// NerevarMoon: one-shot velocity change applied at the next physics step (see Actor::addImpulse).
-        void addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse);
+        void addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, bool asJump);
+        static void applyJumpCost(const MWWorld::Ptr& ptr); // fatigue and acrobatics of a jump
 
         /// Clear the queued movements list without applying.
         void clearQueuedMovement();

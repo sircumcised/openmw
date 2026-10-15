@@ -307,7 +307,7 @@ namespace MWBase
         virtual void queueMovement(const MWWorld::Ptr& ptr, const osg::Vec3f& velocity) = 0;
 
         /// NerevarMoon: one-shot velocity change (units/s) applied to an actor at the next physics step.
-        virtual void addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse) = 0;
+        virtual void addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, bool asJump) = 0;
         ///< Queues movement for \a ptr (in local space), to be applied in the next call to
         /// doPhysics.
 

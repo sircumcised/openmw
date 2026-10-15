@@ -15,6 +15,11 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   of the animation in the actor's local space, kept across animation changes; nil clears it.
   Bones without an animation controller are ignored (warning in the log).
 - `animation.clearBoneOverrides(self)`.
+- Combat core (build 4): `types.Actor.setSpeedMultiplier/getSpeedMultiplier` (applied in
+  `getMaxSpeed`), `setEngineBlock/getEngineBlock` (skips `blockMeleeAttack`), `playHitReaction(actor,
+  'hit'|'block'|'knockdown')` (sets the CreatureStats flags the CharacterController already plays),
+  `isAttackPreparing`, `cancelAttack` (feint: aborts an attack in wind-up). `addImpulse` now takes
+  `{asJump=false}`; an upward impulse from the ground otherwise costs fatigue and trains Acrobatics.
 
 ## Engine changes (all marked `NerevarMoon` in the code)
 - `mwphysics/actor.hpp`: `addImpulse`/`takeImpulse` (main thread), slide velocity.
@@ -28,3 +33,9 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   `resetActiveGroups()`.
 - `mwlua/animationbindings.cpp`, `files/lua_api/openmw/animation.lua`: the bindings (writes deferred
   with `addAction`, reads straight from the node matrices).
+- `mwmechanics/creaturestats.hpp`: `mSpeedMultiplier`, `mEngineBlock` (runtime only, not in saves).
+- `mwclass/npc.cpp`, `mwclass/creature.cpp`: `getMaxSpeed` times the multiplier.
+- `mwmechanics/combat.cpp`: `blockMeleeAttack` returns false when the engine block is disabled.
+- `mwmechanics/character.*`, `actors.*`, `mechanicsmanagerimp.*`, `mwbase/mechanicsmanager.hpp`: `cancelAttack`.
+- `mwphysics/physicssystem.*`: `applyJumpCost` shared by `handleJump` and `addActorImpulse(asJump)`.
+- `mtphysics.cpp` (build 3): the impulse stays pending on frames without a physics step.

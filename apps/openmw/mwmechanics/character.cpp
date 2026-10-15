@@ -2911,6 +2911,21 @@ namespace MWMechanics
         return mUpperBodyState == UpperBodyState::AttackWindUp;
     }
 
+    bool CharacterController::cancelAttack()
+    {
+        if (mUpperBodyState != UpperBodyState::AttackWindUp || mCurrentWeapon.empty())
+            return false;
+        if (mWeaponType == ESM::Weapon::PickProbe || isRandomAttackAnimation(mCurrentWeapon))
+            return false;
+        mAnimation->disable(mCurrentWeapon);
+        mUpperBodyState = UpperBodyState::WeaponEquipped;
+        setAttackingOrSpell(false);
+        mReadyToHit = false;
+        if (mResetIdleOnAttackEnd && mIdleState != CharState_IdleSneak && mIdleState != CharState_IdleSwim)
+            resetCurrentIdleState();
+        return true;
+    }
+
     bool CharacterController::isCastingSpell() const
     {
         return mCastingScriptedSpell || mUpperBodyState == UpperBodyState::Casting;

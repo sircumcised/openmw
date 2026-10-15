@@ -557,7 +557,7 @@ namespace MWClass
         else
             moveSpeed = getWalkSpeed(ptr);
 
-        return moveSpeed;
+        return moveSpeed * stats.getSpeedMultiplier(); // NerevarMoon
     }
 
     MWMechanics::Movement& Creature::getMovementSettings(const MWWorld::Ptr& ptr) const

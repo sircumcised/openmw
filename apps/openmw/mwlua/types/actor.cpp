@@ -311,19 +311,95 @@ namespace MWLua
             = [](const LObject& o) { return MWBase::Environment::get().getWorld()->isOnGround(o.ptr()); };
 
         // NerevarMoon
-        actor["addImpulse"] = [context](const Object& object, const Misc::FiniteVec3f& finiteImpulse) {
+        // NerevarMoon additions ------------------------------------------------------------------------
+        auto requireSelfOrGlobal = [](const Object& object) {
             if (!object.isGObject() && !object.isSelfObject())
                 throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
             if (!object.ptr().getClass().isActor())
                 throw std::runtime_error("Actor expected");
+        };
+        actor["addImpulse"] = [context, requireSelfOrGlobal](const Object& object,
+                                  const Misc::FiniteVec3f& finiteImpulse, sol::optional<sol::table> options) {
+            requireSelfOrGlobal(object);
+            const bool asJump = options ? options->get_or("asJump", true) : true;
             context.mLuaManager->addAction(
-                [obj = Object(object), impulse = finiteImpulse.mValue] {
+                [obj = Object(object), impulse = finiteImpulse.mValue, asJump] {
                     const MWWorld::Ptr ptr = obj.ptr();
                     if (!ptr.isEmpty() && ptr.getClass().isActor())
-                        MWBase::Environment::get().getWorld()->addActorImpulse(ptr, impulse);
+                        MWBase::Environment::get().getWorld()->addActorImpulse(ptr, impulse, asJump);
                 },
                 "AddImpulseAction");
         };
+        actor["getSpeedMultiplier"] = [](const Object& o) {
+            return o.ptr().getClass().getCreatureStats(o.ptr()).getSpeedMultiplier();
+        };
+        actor["setSpeedMultiplier"]
+            = [context, requireSelfOrGlobal](const Object& object, const Misc::FiniteFloat& value) {
+                  requireSelfOrGlobal(object);
+                  if (value < 0.f)
+                      throw std::runtime_error("Speed multiplier must be >= 0");
+                  context.mLuaManager->addAction(
+                      [obj = Object(object), v = static_cast<float>(value)] {
+                          const MWWorld::Ptr ptr = obj.ptr();
+                          if (!ptr.isEmpty() && ptr.getClass().isActor())
+                              ptr.getClass().getCreatureStats(ptr).setSpeedMultiplier(v);
+                      },
+                      "SetSpeedMultiplierAction");
+              };
+        actor["getEngineBlock"]
+            = [](const Object& o) { return o.ptr().getClass().getCreatureStats(o.ptr()).getEngineBlock(); };
+        actor["setEngineBlock"] = [context, requireSelfOrGlobal](const Object& object, bool enabled) {
+            requireSelfOrGlobal(object);
+            context.mLuaManager->addAction(
+                [obj = Object(object), enabled] {
+                    const MWWorld::Ptr ptr = obj.ptr();
+                    if (!ptr.isEmpty() && ptr.getClass().isActor())
+                        ptr.getClass().getCreatureStats(ptr).setEngineBlock(enabled);
+                },
+                "SetEngineBlockAction");
+        };
+        actor["playHitReaction"] = [context, requireSelfOrGlobal](const Object& object, std::string_view kind) {
+            requireSelfOrGlobal(object);
+            int which = -1;
+            if (kind == "hit")
+                which = 0;
+            else if (kind == "block")
+                which = 1;
+            else if (kind == "knockdown")
+                which = 2;
+            else
+                throw std::runtime_error("playHitReaction: kind must be 'hit', 'block' or 'knockdown'");
+            context.mLuaManager->addAction(
+                [obj = Object(object), which] {
+                    const MWWorld::Ptr ptr = obj.ptr();
+                    if (ptr.isEmpty() || !ptr.getClass().isActor())
+                        return;
+                    MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+                    if (stats.isDead())
+                        return;
+                    if (which == 0)
+                        stats.setHitRecovery(true);
+                    else if (which == 1)
+                        stats.setBlock(true);
+                    else
+                        stats.setKnockedDown(true);
+                },
+                "PlayHitReactionAction");
+        };
+        actor["isAttackPreparing"] = [](const Object& o) {
+            return MWBase::Environment::get().getMechanicsManager()->isAttackPreparing(o.ptr());
+        };
+        actor["cancelAttack"] = [context, requireSelfOrGlobal](const Object& object) {
+            requireSelfOrGlobal(object);
+            context.mLuaManager->addAction(
+                [obj = Object(object)] {
+                    const MWWorld::Ptr ptr = obj.ptr();
+                    if (!ptr.isEmpty() && ptr.getClass().isActor())
+                        MWBase::Environment::get().getMechanicsManager()->cancelAttack(ptr);
+                },
+                "CancelAttackAction");
+        };
+        // ----------------------------------------------------------------------------------------------
         actor["isSwimming"]
             = [](const LObject& o) { return MWBase::Environment::get().getWorld()->isSwimming(o.ptr()); };
 

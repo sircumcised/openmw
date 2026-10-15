@@ -390,7 +390,7 @@ namespace MWWorld
 
         void queueMovement(const Ptr& ptr, const osg::Vec3f& velocity) override;
 
-        void addActorImpulse(const Ptr& ptr, const osg::Vec3f& impulse) override;
+        void addActorImpulse(const Ptr& ptr, const osg::Vec3f& impulse, bool asJump) override;
         ///< Queues movement for \a ptr (in local space), to be applied in the next call to
         /// doPhysics.
 
