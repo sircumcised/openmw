@@ -241,6 +241,7 @@ namespace MWRender
             osg::ref_ptr<RotateController> mController;
         };
         std::map<std::string, BoneOverride, std::less<>> mBoneOverrides;
+        mutable std::map<std::string, osg::observer_ptr<const osg::Node>, std::less<>> mExtraNodes;
         void attachBoneOverride(const std::string& bone, BoneOverride& override);
 
         bool mHasMagicEffects;
@@ -459,6 +460,12 @@ namespace MWRender
         /// Return a node with the specified name, or nullptr if not existing.
         /// @note The matching is case-insensitive.
         const osg::Node* getNode(std::string_view name) const;
+
+        /// NerevarMoon: a node by name: the skeleton map first, then the whole object root (attached weapons,
+        /// worn parts). Cached per name; the cache is re-checked when the node is gone.
+        const osg::Node* findNodeAnywhere(std::string_view name) const;
+        /// NerevarMoon: is the node driven by the bone physics solver.
+        bool hasBonePhysics(std::string_view bone) const;
 
         /// NerevarMoon: world transform of a bone as left by the last update traversal.
         /// Reads only node matrices, so it is safe from the Lua thread while the frame is being drawn.

@@ -5,6 +5,7 @@
 // solver with gravity, damping, elasticity towards the animated pose and sphere/capsule colliders attached to
 // skeleton bones. Configured by a YAML file next to the model: "<model>.physics.yaml".
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -36,6 +37,7 @@ namespace SceneUtil
             float mGravity = 1.f; // multiple of the game gravity (627 units/s^2)
             float mInertia = 1.f; // 0..1, share of the mount's motion the chain inherits (1 = full)
             float mRadius = 1.f; // particle radius against colliders
+            bool mWorld = true; // collide with the world (floor, walls) through the engine's ray hook
         };
         struct Collider
         {
@@ -68,6 +70,12 @@ namespace SceneUtil
 
         void operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv);
 
+        /// Ray against the world set by the engine (physics system). Returns true on a hit and fills the hit
+        /// point and normal. Called from the main thread during the update traversal.
+        using WorldRay = std::function<bool(const osg::Vec3f& from, const osg::Vec3f& to, osg::Vec3f& hitPos,
+            osg::Vec3f& hitNormal)>;
+        static void setWorldRay(WorldRay ray);
+
         /// Snap the chain back to the animated pose on the next update.
         void reset() { mResolved = false; }
 
@@ -88,6 +96,7 @@ namespace SceneUtil
         bool resolve(osg::MatrixTransform* node);
         void resetState(const osg::Matrixf& mountWorld);
         void collide(osg::Vec3f& pos, float radius) const;
+        void collideWorld(osg::Vec3f& pos, const osg::Vec3f& prev, float radius) const;
 
         BonePhysicsSpec::Chain mChain;
         std::vector<BonePhysicsSpec::Collider> mColliderSpecs;

@@ -23,6 +23,12 @@ namespace SceneUtil
         constexpr float sMaxDt = 0.05f;
         constexpr float sTeleportDistance = 150.f;
 
+        BonePhysicsController::WorldRay& worldRay()
+        {
+            static BonePhysicsController::WorldRay ray;
+            return ray;
+        }
+
         osg::Vec3f readVec3(const YAML::Node& node, const osg::Vec3f& fallback)
         {
             if (!node || !node.IsSequence() || node.size() != 3)
@@ -99,6 +105,8 @@ namespace SceneUtil
             chain.mGravity = readClamped(it["gravity"], chain.mGravity, -10.f, 10.f);
             chain.mInertia = readClamped(it["inertia"], chain.mInertia, 0.f, 1.f);
             chain.mRadius = readClamped(it["radius"], chain.mRadius, 0.f, 100.f);
+            if (it["world"])
+                chain.mWorld = it["world"].as<bool>();
             spec.mChains.push_back(std::move(chain));
         }
         if (root["colliders"])
@@ -303,6 +311,34 @@ namespace SceneUtil
         }
     }
 
+    void BonePhysicsController::setWorldRay(WorldRay ray)
+    {
+        worldRay() = std::move(ray);
+    }
+
+    void BonePhysicsController::collideWorld(osg::Vec3f& pos, const osg::Vec3f& prev, float radius) const
+    {
+        const WorldRay& ray = worldRay();
+        if (!ray)
+            return;
+        osg::Vec3f hitPos, hitNormal;
+        // the particle's path this frame: through a floor or a wall
+        if ((pos - prev).length2() > 1e-6f && ray(prev, pos, hitPos, hitNormal))
+        {
+            pos = hitPos + hitNormal * radius;
+            return;
+        }
+        // resting: the floor just under it
+        const osg::Vec3f probe(0.f, 0.f, radius + 0.5f);
+        if (ray(pos + probe, pos - probe, hitPos, hitNormal))
+        {
+            if (hitNormal.z() > 0.3f)
+                pos.z() = std::max(pos.z(), hitPos.z() + radius);
+            else
+                pos = hitPos + hitNormal * radius;
+        }
+    }
+
     void BonePhysicsController::operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv)
     {
         if (!mRoot || mBroken || nv == nullptr || nv->getFrameStamp() == nullptr)
@@ -394,6 +430,8 @@ namespace SceneUtil
                     next.mPos = rest + bend * (maxBend / bendLen);
             }
             collide(next.mPos, mChain.mRadius);
+            if (mChain.mWorld)
+                collideWorld(next.mPos, next.mPrev, mChain.mRadius);
 
             osg::Vec3f dir = next.mPos - joint;
             osg::Vec3f restDir = animRot * mRestOffsets[i];

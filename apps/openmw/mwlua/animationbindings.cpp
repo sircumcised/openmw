@@ -254,6 +254,10 @@ namespace MWLua
             return LuaUtil::asTransform(*m);
         };
 
+        api["hasBonePhysics"] = [](const LObject& object, std::string_view bonename) -> bool {
+            return getConstAnimationOrThrow(object)->hasBonePhysics(bonename);
+        };
+
         auto queueBoneOverride = [context](const SelfObject& object, std::string_view bonename,
                                      std::optional<osg::Quat> rotate, std::optional<osg::Vec3f> offset) {
             if (getConstAnimationOrThrow(object)->getNode(bonename) == nullptr)

@@ -212,13 +212,22 @@
 
 ---
 -- NerevarMoon: world transform of a bone as left by the last frame's update (one frame of latency).
--- Works on any object with an animation. Returns nil if the bone does not exist.
+-- Works on any object with an animation. Nodes of attached weapons and worn parts (e.g. a flail's chain links)
+-- are found too. Returns nil if the node does not exist.
 -- @function [parent=#animation] getBoneTransform
 -- @param openmw.core#GameObject actor
 -- @param #string boneName
 -- @return openmw.util#Transform world transform of the bone, or nil
 -- @usage local t = animation.getBoneTransform(self, 'Weapon Bone')
 -- local tip = t:apply(util.vector3(0, 0, 60)) -- 60 units along the bone's z axis, in world space
+
+---
+-- NerevarMoon: is this node driven by the engine's bone physics solver (a `<model>.physics.yaml` chain).
+-- Nodes of attached weapons and worn parts are found too, like in getBoneTransform.
+-- @function [parent=#animation] hasBonePhysics
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @return #boolean
 
 ---
 -- NerevarMoon: apply a rotation and/or an offset on top of the animation of one bone, in the actor's local

@@ -27,10 +27,11 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   keyframe controllers; the solver runs in the update traversal of the first bone, once per instance.
   Format: `chains: [{bones: [...], tip: [x,y,z], damping, elasticity, stiffness, gravity, inertia,
   radius}]`, `colliders: [{bone, radius, offset: [x,y,z], end: [x,y,z]}]`. Pilot: the Iron Flail chain
-  (`meshes/w/nm/w_nm_iron_flail.nif.physics.yaml` in the Engine Test mod). Limits: no world collision
-  (a flail on the ground hangs through the floor), colliders on bones visited later in the same frame
-  lag one frame, `animation.getBoneTransform` does not see weapon nodes (the actor's node map is built
-  from the skeleton only).
+  (`meshes/w/nm/w_nm_iron_flail.nif.physics.yaml` in the Engine Test mod). World collision through a ray
+  hook the physics system installs (`BonePhysicsController::setWorldRay`: floors, walls, doors; `world:
+  false` per chain turns it off). `animation.getBoneTransform` and the new `animation.hasBonePhysics` also
+  find nodes of attached weapons and worn parts (`Animation::findNodeAnywhere`, cached). Limit left:
+  colliders on skeleton bones visited later in the same frame lag one frame.
 
 ## Engine changes (all marked `NerevarMoon` in the code)
 - `mwphysics/actor.hpp`: `addImpulse`/`takeImpulse` (main thread), slide velocity.
