@@ -21,6 +21,17 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   `isAttackPreparing`, `cancelAttack` (feint: aborts an attack in wind-up). `addImpulse` now takes
   `{asJump=false}`; an upward impulse from the ground otherwise costs fatigue and trains Acrobatics.
 
+- Bone physics (build 5): a file `<model>.physics.yaml` next to a model (any data directory, VFS path)
+  puts the listed bone chains under a position-based solver (gravity, damping, elasticity towards the
+  rest pose, stiffness, capsule colliders on the wielder's skeleton bones). The chain nodes lose their
+  keyframe controllers; the solver runs in the update traversal of the first bone, once per instance.
+  Format: `chains: [{bones: [...], tip: [x,y,z], damping, elasticity, stiffness, gravity, inertia,
+  radius}]`, `colliders: [{bone, radius, offset: [x,y,z], end: [x,y,z]}]`. Pilot: the Iron Flail chain
+  (`meshes/w/nm/w_nm_iron_flail.nif.physics.yaml` in the Engine Test mod). Limits: no world collision
+  (a flail on the ground hangs through the floor), colliders on bones visited later in the same frame
+  lag one frame, `animation.getBoneTransform` does not see weapon nodes (the actor's node map is built
+  from the skeleton only).
+
 ## Engine changes (all marked `NerevarMoon` in the code)
 - `mwphysics/actor.hpp`: `addImpulse`/`takeImpulse` (main thread), slide velocity.
 - `mwphysics/physicssystem.hpp`: `ActorFrameData::mImpulse`, `mSlide`; `PhysicsSystem::addActorImpulse`.
@@ -39,3 +50,5 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
 - `mwmechanics/character.*`, `actors.*`, `mechanicsmanagerimp.*`, `mwbase/mechanicsmanager.hpp`: `cancelAttack`.
 - `mwphysics/physicssystem.*`: `applyJumpCost` shared by `handleJump` and `addActorImpulse(asJump)`.
 - `mtphysics.cpp` (build 3): the impulse stays pending on frames without a physics step.
+- `components/sceneutil/bonephysics.*` (build 5): spec parser, `attachBonePhysics`, `BonePhysicsController`;
+  hooked in `Resource::SceneManager::getTemplate` right after the model is loaded, before the optimizer.
