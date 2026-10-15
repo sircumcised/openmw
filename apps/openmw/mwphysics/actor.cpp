@@ -30,6 +30,8 @@ namespace MWPhysics
         , mStuckFrames(0)
         , mLastStuckPosition{ 0, 0, 0 }
         , mForce(0.f, 0.f, 0.f)
+        , mPendingImpulse(0.f, 0.f, 0.f)
+        , mSlideVelocity(0.f, 0.f, 0.f)
         , mOnGround(ptr.getClass().getCreatureStats(ptr).getFallHeight() == 0)
         , mOnSlope(false)
         , mInternalCollisionMode(true)

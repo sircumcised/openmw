@@ -632,6 +632,13 @@ namespace MWPhysics
             found->second->setVelocity(velocity);
     }
 
+    void PhysicsSystem::addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse)
+    {
+        ActorMap::iterator found = mActors.find(ptr.mRef);
+        if (found != mActors.end())
+            found->second->addImpulse(impulse);
+    }
+
     void PhysicsSystem::clearQueuedMovement()
     {
         for (const auto& [_, actor] : mActors)
@@ -880,6 +887,8 @@ namespace MWPhysics
     ActorFrameData::ActorFrameData(
         Actor& actor, bool inert, bool waterCollision, float slowFall, float waterlevel, bool isPlayer)
         : mPosition()
+        , mImpulse()
+        , mSlide()
         , mStandingOn(nullptr)
         , mIsOnGround(actor.getOnGround())
         , mIsOnSlope(actor.getOnSlope())

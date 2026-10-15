@@ -138,6 +138,17 @@
 -- @return #boolean
 
 ---
+-- (NerevarMoon engine) Queue a one-shot velocity change (game units per second) for the next physics step.
+-- A positive Z launches the actor like a jump (fall damage and landing work as usual); in the air it adds to the
+-- momentum; a horizontal push on the ground becomes a slide damped by friction (gone in ~0.2 s).
+-- Can be used in global scripts, or in local scripts on self.
+-- @function [parent=#Actor] addImpulse
+-- @param openmw.core#GameObject actor
+-- @param openmw.util#Vector3 impulse
+-- @usage types.Actor.addImpulse(self, util.vector3(0, 0, 500))  -- hop
+-- @usage types.Actor.addImpulse(self, -self.rotation:apply(util.vector3(0, 400, 0)))  -- knocked back
+
+---
 -- Is the actor in water. Can be called only from a local script.
 -- @function [parent=#Actor] isSwimming
 -- @param openmw.core#GameObject actor

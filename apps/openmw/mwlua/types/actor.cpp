@@ -309,6 +309,21 @@ namespace MWLua
 
         actor["isOnGround"]
             = [](const LObject& o) { return MWBase::Environment::get().getWorld()->isOnGround(o.ptr()); };
+
+        // NerevarMoon
+        actor["addImpulse"] = [context](const Object& object, const Misc::FiniteVec3f& finiteImpulse) {
+            if (!object.isGObject() && !object.isSelfObject())
+                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
+            if (!object.ptr().getClass().isActor())
+                throw std::runtime_error("Actor expected");
+            context.mLuaManager->addAction(
+                [obj = Object(object), impulse = finiteImpulse.mValue] {
+                    const MWWorld::Ptr ptr = obj.ptr();
+                    if (!ptr.isEmpty() && ptr.getClass().isActor())
+                        MWBase::Environment::get().getWorld()->addActorImpulse(ptr, impulse);
+                },
+                "AddImpulseAction");
+        };
         actor["isSwimming"]
             = [](const LObject& o) { return MWBase::Environment::get().getWorld()->isSwimming(o.ptr()); };
 

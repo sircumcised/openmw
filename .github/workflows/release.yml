@@ -7,6 +7,8 @@ on:
 
 jobs:
   Windows:
+    # Upstream releases are not built in this fork (see nmcoop.yml).
+    if: github.repository == 'OpenMW/openmw'
     uses: ./.github/workflows/windows.yml
     with:
       image: "2022"
@@ -15,6 +17,7 @@ jobs:
       release: true
     secrets: inherit
   MacOS:
+    if: github.repository == 'OpenMW/openmw'
     strategy:
       fail-fast: true
       matrix:

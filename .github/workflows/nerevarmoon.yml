@@ -1,0 +1,51 @@
+# NerevarMoon engine: builds the Windows game with the NerevarMoon engine additions (see NEREVARMOON.md).
+#
+# Runs on every push to the nerevarmoon branch and by hand from the Actions tab. The result is the
+# artifact "openmw-windows-2022-<commit>" of the run (a complete, portable OpenMW folder), also
+# published as the release "nerevarmoon-build-N" so it can be downloaded without a GitHub account.
+name: NerevarMoon Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-type:
+        description: Release is what official builds use. RelWithDebInfo is the configuration upstream builds on every push (slower game, safest build).
+        type: choice
+        default: Release
+        options:
+        - Release
+        - RelWithDebInfo
+  push:
+    branches:
+      - nerevarmoon
+
+jobs:
+  Windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      image: "2022"
+      build-type: ${{ inputs.build-type || 'Release' }}
+
+  Release:
+    needs: Windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: nerevarmoon-build-${{ github.run_number }}
+    steps:
+    - uses: actions/download-artifact@v6
+      with:
+        name: openmw-windows-2022-${{ github.sha }}
+        path: OpenMW-NerevarMoon
+
+    - name: Pack
+      run: zip -r -q "OpenMW-NerevarMoon-${RELEASE_TAG}-win64.zip" OpenMW-NerevarMoon
+
+    - uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.RELEASE_TAG }}
+        target_commitish: ${{ github.sha }}
+        name: OpenMW NerevarMoon ${{ env.RELEASE_TAG }}
+        body: OpenMW 0.51.0 with the NerevarMoon engine additions (see NEREVARMOON.md in the repository). Unzip anywhere and run openmw.exe from that folder.
+        files: OpenMW-NerevarMoon-${{ env.RELEASE_TAG }}-win64.zip

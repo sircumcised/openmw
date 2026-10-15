@@ -1,0 +1,19 @@
+# NerevarMoon engine (OpenMW 0.51.0 + additions)
+
+Branch `nerevarmoon`, based on the tag `openmw-0.51.0`. Built for Windows by the workflow
+"NerevarMoon Engine" (release `nerevarmoon-build-N`). Everything here is additive: a stock
+OpenMW mod keeps working, a mod that uses these additions needs this build.
+
+## Lua API additions
+- `types.Actor.addImpulse(actor, vector3)` (global scripts, or local scripts on self): a one-shot
+  velocity change in game units per second, applied at the next physics step. Up = launched like a
+  jump (landing sound and fall damage work as usual); in the air = added momentum; a horizontal push
+  on the ground = a slide damped by friction (`MWPhysics::sSlideFriction`, gone in about 0.2 s).
+
+## Engine changes (all marked `NerevarMoon` in the code)
+- `mwphysics/actor.hpp`: `addImpulse`/`takeImpulse` (main thread), slide velocity.
+- `mwphysics/physicssystem.hpp`: `ActorFrameData::mImpulse`, `mSlide`; `PhysicsSystem::addActorImpulse`.
+- `mwphysics/mtphysics.cpp`: impulse and slide copied into the frame data, slide written back.
+- `mwphysics/movementsolver.cpp`: impulse applied (jump / air / slide), slide friction.
+- `mwbase/world.hpp`, `mwworld/worldimp.*`: `World::addActorImpulse`.
+- `mwlua/types/actor.cpp`, `files/lua_api/openmw/types.lua`: the binding and its documentation.

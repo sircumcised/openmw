@@ -168,11 +168,33 @@ namespace MWPhysics
         {
             velocity = (osg::Quat(actor.mRotation.y(), osg::Vec3f(0, 0, -1))) * actor.mMovement;
 
-            if ((velocity.z() > 0.f && actor.mIsOnGround && !actor.mIsOnSlope)
+            // NerevarMoon: a queued impulse (Lua) launches the actor like a jump when it points up, adds to the
+            // inertia in the air, and otherwise becomes a slide damped by ground friction below.
+            if (actor.mImpulse.length2() > 0.f)
+            {
+                if (actor.mImpulse.z() > 0.f && actor.mIsOnGround)
+                {
+                    actor.mInertia = velocity + actor.mImpulse;
+                    velocity = actor.mInertia;
+                }
+                else if (!actor.mIsOnGround || actor.mIsOnSlope)
+                {
+                    actor.mInertia += actor.mImpulse;
+                    velocity = velocity + actor.mInertia;
+                }
+                else
+                {
+                    actor.mSlide += osg::Vec3f(actor.mImpulse.x(), actor.mImpulse.y(), 0.f);
+                }
+                actor.mImpulse = osg::Vec3f();
+            }
+            else if ((velocity.z() > 0.f && actor.mIsOnGround && !actor.mIsOnSlope)
                 || (velocity.z() > 0.f && velocity.z() + actor.mInertia.z() <= -velocity.z() && actor.mIsOnSlope))
                 actor.mInertia = velocity;
             else if (!actor.mIsOnGround || actor.mIsOnSlope)
                 velocity = velocity + actor.mInertia;
+
+            velocity += actor.mSlide;
         }
 
         // Now that we have the effective movement vector, apply wind forces to it
@@ -440,6 +462,16 @@ namespace MWPhysics
         }
         actor.mIsOnGround = isOnGround;
         actor.mIsOnSlope = isOnSlope;
+
+        // NerevarMoon: ground friction damps the slide; in the air it carries on (and gravity acts through
+        // the inertia above). Below ~1 unit/s it stops for good.
+        if (actor.mSlide.length2() > 0.f)
+        {
+            if (isOnGround)
+                actor.mSlide *= std::max(0.f, 1.f - time * sSlideFriction);
+            if (actor.mSlide.length2() < 1.f)
+                actor.mSlide = osg::Vec3f();
+        }
 
         actor.mPosition = newPosition;
         // remove what was added earlier in compensating for doTrace not taking interior transformation into account
