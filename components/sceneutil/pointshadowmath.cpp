@@ -104,7 +104,7 @@ namespace SceneUtil::PointShadow
 
     float farPlane(float lightRadius)
     {
-        return std::clamp(2.f * lightRadius, 16.f, 16384.f);
+        return std::clamp(2.f * lightRadius, 2.f * sNearPlane, 16384.f);
     }
 
     int faceOf(const osg::Vec3f& dir, osg::Vec2f& uv)
@@ -125,12 +125,16 @@ namespace SceneUtil::PointShadow
 
     float faceDepthNdc(float axisDistance, float far)
     {
-        return (far + 1.f) / (far - 1.f) - 2.f * far / ((far - 1.f) * axisDistance);
+        const float n = sNearPlane;
+        return (far + n) / (far - n) - 2.f * far * n / ((far - n) * axisDistance);
     }
 
     float shadowCompareDepth(float axisDistance, float far, float bias)
     {
-        return faceDepthNdc(std::max(axisDistance * (1.f - bias), 1.f), far) * 0.5f + 0.5f;
+        const float biased = axisDistance * (1.f - bias);
+        if (biased <= sNearPlane)
+            return 0.f;
+        return faceDepthNdc(biased, far) * 0.5f + 0.5f;
     }
 
     namespace
@@ -164,7 +168,7 @@ namespace SceneUtil::PointShadow
 
     osg::Matrixf faceProjection(float far)
     {
-        return osg::Matrixf::perspective(90.0, 1.0, 1.0, far);
+        return osg::Matrixf::perspective(90.0, 1.0, sNearPlane, far);
     }
 
     int advanceSlot(SlotState& s, int targetId, bool currentPresent, float dt)

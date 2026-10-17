@@ -101,9 +101,22 @@ namespace
 
     TEST(PointShadowMath, FarPlaneClamped)
     {
-        EXPECT_FLOAT_EQ(farPlane(0.f), 16.f);
+        EXPECT_FLOAT_EQ(farPlane(0.f), 2.f * sNearPlane);
         EXPECT_FLOAT_EQ(farPlane(100.f), 200.f);
         EXPECT_FLOAT_EQ(farPlane(1e6f), 16384.f);
+    }
+
+    // geometry hugging the light (lamp housing, bracket, the pipe a Dwemer lamp hangs on) must never cast:
+    // the near plane sits 16 units (~22 cm) out, and a receiver inside it reads as lit
+    TEST(PointShadowMath, NearPlaneSkipsGeometryHuggingTheLight)
+    {
+        EXPECT_FLOAT_EQ(sNearPlane, 16.f);
+        EXPECT_NEAR(faceDepthNdc(sNearPlane, 512.f), -1.f, 1e-5f);
+        EXPECT_NEAR(faceDepthNdc(512.f, 512.f), 1.f, 1e-5f);
+        const osg::Vec4f clip = osg::Vec4f(sNearPlane * 0.5f, 0.f, 0.f, 1.f) * faceView(0, osg::Vec3f())
+            * faceProjection(512.f);
+        EXPECT_LT(clip.z() / clip.w(), -1.f); // 8 units along +X: in front of the near plane, clipped away
+        EXPECT_FLOAT_EQ(shadowCompareDepth(8.f, 512.f, 0.01f), 0.f); // receiver inside the near plane: depth 0 = lit
     }
 
     TEST(PointShadowMath, FaceOfMatchesFaceView)

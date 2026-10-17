@@ -400,6 +400,7 @@ namespace SceneUtil
             { "pointShadowResolution", std::to_string(settings.mPointShadowResolution.get()) + ".0" },
             { "pointShadowBias", std::to_string(settings.mPointShadowBias.get()) },
             { "pointShadowNormalOffset", std::to_string(settings.mPointShadowNormalOffset.get()) },
+            { "pointShadowNear", std::to_string(PointShadow::sNearPlane) },
             { "pointShadowDebug", settings.mPointShadowDebug ? "1" : "0" },
         };
     }
@@ -413,6 +414,7 @@ namespace SceneUtil
             { "pointShadowResolution", "512.0" },
             { "pointShadowBias", "0.01" },
             { "pointShadowNormalOffset", "0.0" },
+            { "pointShadowNear", "16.0" },
             { "pointShadowDebug", "0" },
         };
     }

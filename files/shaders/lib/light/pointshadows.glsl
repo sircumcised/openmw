@@ -77,11 +77,13 @@ float nmPointShadow(int lightIndex, vec3 viewPos, vec3 viewNormal)
         nmPointShadowFace(worldPos - nmShadowLightPos[slot], face, uv, axisDistance);
 
         float farPlane = nmShadowFar[slot];
-        if (axisDistance >= farPlane)
-            return 1.0;
+        float nearPlane = @pointShadowNear; // PointShadow::sNearPlane: casters hugging the light never cast
         // bias as a fraction of the distance (PointShadow::shadowCompareDepth), same world margin at any range
-        float biased = max(axisDistance * (1.0 - @pointShadowBias), 1.0);
-        float ndc = (farPlane + 1.0) / (farPlane - 1.0) - 2.0 * farPlane / ((farPlane - 1.0) * biased);
+        float biased = axisDistance * (1.0 - @pointShadowBias);
+        if (axisDistance >= farPlane || biased <= nearPlane)
+            return 1.0;
+        float ndc = (farPlane + nearPlane) / (farPlane - nearPlane)
+            - 2.0 * farPlane * nearPlane / ((farPlane - nearPlane) * biased);
         float ref = ndc * 0.5 + 0.5;
 
         float visibility = nmSamplePointShadow(nmPointShadowStatic, slot, face, uv, ref);

@@ -53,6 +53,9 @@ objects, actors and the player. Off by default; `[Shadows]` settings:
 
 Limits: interiors only; moving lights (a torch carried by the player or an NPC) cast none; an item
 picked up or dropped updates its shadow only when the light changes slot or the cell changes.
+Casters within 16 units (~22 cm) of the light never cast (`PointShadow::sNearPlane`): a Dwemer lamp sits
+on its pipe inside a bracket, and with a 1-unit near plane that geometry filled the four side faces, so
+light left only through the open top and bottom (build 12 bug, fixed in build 13).
 Shaders: `lib/light/pointshadows.glsl`, hooked in the point light loop of `lib/light/lighting.glsl`
 (per-pixel lighting only). A replaced `lighting.glsl` (shader packs) needs the same hook: include
 `pointshadows.glsl`, multiply the light's diffuse and specular by `nmPointShadow(lightIndex, viewPos,
