@@ -716,6 +716,9 @@ namespace Shader
             case Slot::ShadowMaps:
                 slotDescr = "shadow maps";
                 break;
+            case Slot::PointShadowMaps:
+                slotDescr = "point shadow maps";
+                break;
             default:
                 slotDescr = "UNKNOWN";
         }

@@ -80,6 +80,7 @@ namespace Shader
             OpaqueDepthTexture,
             SkyTexture,
             ShadowMaps,
+            PointShadowMaps,
             SLOT_COUNT
         };
 

@@ -8,6 +8,7 @@
 #include <components/stereo/stereomanager.hpp>
 
 #include "mwshadowtechnique.hpp"
+#include "pointshadow.hpp"
 
 namespace SceneUtil
 {
@@ -110,7 +111,8 @@ namespace SceneUtil
 
     ShadowManager::ShadowManager(osg::ref_ptr<osg::Group> sceneRoot, osg::ref_ptr<osg::Group> rootNode,
         unsigned int outdoorShadowCastingMask, unsigned int indoorShadowCastingMask, unsigned int worldMask,
-        const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager)
+        const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager, LightManager* lightManager,
+        unsigned int pointShadowStaticMask, unsigned int pointShadowDynamicMask)
         : mShadowedScene(new osgShadow::ShadowedScene)
         , mShadowTechnique(new MWShadowTechnique)
         , mOutdoorShadowCastingMask(outdoorShadowCastingMask)
@@ -134,6 +136,10 @@ namespace SceneUtil
         mShadowTechnique->setupCastingShader(shaderManager);
         mShadowTechnique->setWorldMask(worldMask);
 
+        if (lightManager)
+            mPointShadowManager = std::make_unique<PointShadowManager>(rootNode, *lightManager, pointShadowStaticMask,
+                pointShadowDynamicMask, settings, shaderManager);
+
         enableOutdoorMode();
 
         sInstance = this;
@@ -147,10 +153,19 @@ namespace SceneUtil
 
     Shader::ShaderManager::DefineMap ShadowManager::getShadowDefines(const Settings::ShadowsCategory& settings) const
     {
-        if (!mEnableShadows)
-            return getShadowsDisabledDefines();
+        Shader::ShaderManager::DefineMap pointDefines = mPointShadowManager
+            ? mPointShadowManager->getDefines(settings)
+            : PointShadowManager::getDisabledDefines();
 
-        Shader::ShaderManager::DefineMap definesWithShadows;
+        if (!mEnableShadows)
+        {
+            Shader::ShaderManager::DefineMap definesWithoutShadows = getShadowsDisabledDefines();
+            for (const auto& [name, value] : pointDefines)
+                definesWithoutShadows[name] = value;
+            return definesWithoutShadows;
+        }
+
+        Shader::ShaderManager::DefineMap definesWithShadows = pointDefines;
 
         definesWithShadows["shadows_enabled"] = "1";
 
@@ -193,6 +208,9 @@ namespace SceneUtil
 
         definesWithoutShadows["limitShadowMapDistance"] = "0";
 
+        for (const auto& [name, value] : PointShadowManager::getDisabledDefines())
+            definesWithoutShadows[name] = value;
+
         return definesWithoutShadows;
     }
 
@@ -202,6 +220,8 @@ namespace SceneUtil
             mShadowSettings->setCastsShadowTraversalMask(mIndoorShadowCastingMask);
         else
             mShadowTechnique->disableShadows(true);
+        if (mPointShadowManager)
+            mPointShadowManager->setActive(true);
     }
 
     void ShadowManager::enableOutdoorMode()
@@ -209,5 +229,7 @@ namespace SceneUtil
         if (mEnableShadows)
             mShadowTechnique->enableShadows();
         mShadowSettings->setCastsShadowTraversalMask(mOutdoorShadowCastingMask);
+        if (mPointShadowManager)
+            mPointShadowManager->setActive(false);
     }
 }
