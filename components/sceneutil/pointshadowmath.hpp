@@ -1,0 +1,47 @@
+#ifndef OPENMW_COMPONENTS_SCENEUTIL_POINTSHADOWMATH_H
+#define OPENMW_COMPONENTS_SCENEUTIL_POINTSHADOWMATH_H
+
+#include <array>
+#include <unordered_map>
+#include <vector>
+
+#include <osg/Matrixf>
+#include <osg/Vec2f>
+#include <osg/Vec3f>
+
+namespace SceneUtil::PointShadow
+{
+    constexpr int sMaxSlots = 4;
+
+    /// LightSource ids per shadow slot, -1 = empty
+    using Slots = std::array<int, sMaxSlots>;
+
+    struct Candidate
+    {
+        int mId;
+        float mScore;
+        bool mMoved;
+    };
+
+    float score(float radius, float intensity, float distance);
+
+    /// Keeps incumbents unless an outsider beats the weakest by more than 20%; at most one swap per call.
+    Slots selectSlots(const std::vector<Candidate>& lights, const Slots& current, int maxSlots);
+
+    /// Maps slot ids to LightBuffer indices of this frame, -1 when the light has no index.
+    std::array<int, sMaxSlots> toBufferIndices(const Slots& slots, const std::unordered_map<int, int>& indexMap);
+
+    float farPlane(float lightRadius);
+
+    /// Cube face (0..5 = +X, -X, +Y, -Y, +Z, -Z) seen along dir, and the [0,1] texture coordinates on it.
+    int faceOf(const osg::Vec3f& dir, osg::Vec2f& uv);
+
+    /// NDC depth that faceProjection(far) gives a point at axisDistance along the face's axis.
+    float faceDepthNdc(float axisDistance, float far);
+
+    osg::Matrixf faceView(int face, const osg::Vec3f& lightPos);
+
+    osg::Matrixf faceProjection(float far);
+}
+
+#endif
