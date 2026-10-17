@@ -49,6 +49,32 @@ namespace SceneUtil
         private:
             PointShadowManager* mManager;
         };
+
+        // Shadow cameras have no children: a second parent on the light manager would multiply every
+        // getParentalNodePaths() under the scene. They cull the scene through this callback instead.
+        class CasterCullCallback
+            : public SceneUtil::NodeCallback<CasterCullCallback, osg::Node*, osgUtil::CullVisitor*>
+        {
+        public:
+            CasterCullCallback(osg::Node* scene, osg::StateSet* shadowsBin)
+                : mScene(scene)
+                , mShadowsBin(shadowsBin)
+            {
+            }
+
+            void operator()(osg::Node*, osgUtil::CullVisitor* cv)
+            {
+                if (mShadowsBin)
+                    cv->pushStateSet(mShadowsBin);
+                mScene->accept(*cv);
+                if (mShadowsBin)
+                    cv->popStateSet();
+            }
+
+        private:
+            osg::Node* mScene;
+            osg::StateSet* mShadowsBin;
+        };
     }
 
     PointShadowManager::PointShadowManager(osg::ref_ptr<osg::Group> rootNode, LightManager& lightManager,
@@ -93,9 +119,8 @@ namespace SceneUtil
             stateset->addUniform(uniform.second.first.get());
 
         mCastingStateSet = createCastingStateSet(settings, shaderManager);
-        mCasterRoot = new osg::Group;
-        mCasterRoot->setStateSet(shadowsBinStateSet);
-        mCasterRoot->addChild(&mLightManager);
+        mShadowsBinStateSet = std::move(shadowsBinStateSet);
+        mCasterCallback = new CasterCullCallback(&mLightManager, mShadowsBinStateSet.get());
 
         for (int slot = 0; slot < PointShadow::sMaxSlots; ++slot)
             for (int face = 0; face < 6; ++face)
@@ -118,7 +143,6 @@ namespace SceneUtil
         if (!mValid)
             return;
         mLightManager.removeCullCallback(mCullCallback);
-        mCasterRoot->removeChildren(0, mCasterRoot->getNumChildren());
         osg::StateSet* stateset = mRootNode->getOrCreateStateSet();
         stateset->removeTextureAttribute(mStaticUnit, osg::StateAttribute::TEXTURE);
         stateset->removeTextureAttribute(mDynamicUnit, osg::StateAttribute::TEXTURE);
@@ -196,7 +220,8 @@ namespace SceneUtil
         camera->setReadBuffer(GL_NONE);
         camera->attach(osg::Camera::DEPTH_BUFFER, target);
         camera->setStateSet(mCastingStateSet);
-        camera->addChild(mCasterRoot);
+        camera->setCullingActive(false);
+        camera->setCullCallback(mCasterCallback);
         return camera;
     }
 
@@ -234,6 +259,7 @@ namespace SceneUtil
             for (auto& slot : mSlots)
                 PointShadow::deactivate(slot);
             mLastPositions.clear();
+            mOrigins.clear();
         }
     }
 
@@ -275,6 +301,21 @@ namespace SceneUtil
             if (radius <= 0.f)
                 continue;
             const int id = source->getId();
+            auto origin = mOrigins.find(id);
+            if (origin == mOrigins.end())
+            {
+                const osg::NodePathList paths = source->getParentalNodePaths();
+                const osg::NodePath path = paths.empty() ? osg::NodePath() : paths[0];
+                // carriers and light owners are told apart by their explicit category masks
+                origin = mOrigins
+                             .emplace(id,
+                                 LightOrigin{ PointShadow::isCarried(path, mDynamicMask & ~mStaticMask),
+                                     PointShadow::lightOwner(path, mStaticMask & ~mDynamicMask) })
+                             .first;
+            }
+            // torches in hand: out of scope, and the dynamic cube would draw the carrier around the light
+            if (origin->second.mCarried)
+                continue;
             const osg::Vec3f position = transform.mWorldMatrix.getTrans();
             const auto last = mLastPositions.find(id);
             const bool moved = last != mLastPositions.end() && (last->second - position).length2() > 0.25f;
@@ -286,6 +327,10 @@ namespace SceneUtil
         mLastPositions.clear();
         for (const auto& [id, info] : lights)
             mLastPositions[id] = info.mPosition;
+        std::erase_if(mOrigins, [&](const auto& entry) {
+            return std::none_of(mLightManager.getLights().begin(), mLightManager.getLights().end(),
+                [&](const LightManager::LightSourceTransform& t) { return t.mLightSource->getId() == entry.first; });
+        });
 
         PointShadow::Slots current;
         for (int i = 0; i < PointShadow::sMaxSlots; ++i)
@@ -311,7 +356,17 @@ namespace SceneUtil
             const osg::Vec3f& lightPos = info->second.mPosition;
             const float far = PointShadow::farPlane(info->second.mRadius);
             if (staticFace >= 0)
+            {
+                // the lantern or sconce around the light would otherwise block it
+                osg::ref_ptr<osg::Node> owner;
+                mOrigins[slot.mLightId].mOwner.lock(owner);
+                const osg::Node::NodeMask ownerMask = owner ? owner->getNodeMask() : 0;
+                if (owner)
+                    owner->setNodeMask(0);
                 cullCamera(*mStaticCameras[i][staticFace], staticFace, lightPos, far, mStaticMask, cv);
+                if (owner)
+                    owner->setNodeMask(ownerMask);
+            }
             // shortcut: all 6 actor faces every frame; cull per face against actor bounds if the F3 cull time shows it.
             for (int face = 0; face < 6; ++face)
                 cullCamera(*mDynamicCameras[i][face], face, lightPos, far, mDynamicMask, cv);
@@ -356,7 +411,7 @@ namespace SceneUtil
             { "pointShadowStaticUnit", "0" },
             { "pointShadowDynamicUnit", "0" },
             { "pointShadowResolution", "512.0" },
-            { "pointShadowBias", "0.0" },
+            { "pointShadowBias", "0.01" },
             { "pointShadowNormalOffset", "0.0" },
             { "pointShadowDebug", "0" },
         };

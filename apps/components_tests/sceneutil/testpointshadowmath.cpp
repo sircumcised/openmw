@@ -1,6 +1,7 @@
 #include <components/sceneutil/pointshadowmath.hpp>
 
 #include <gtest/gtest.h>
+#include <osg/Group>
 
 #include <algorithm>
 #include <random>
@@ -197,5 +198,61 @@ namespace
         EXPECT_EQ(s.mLightId, -1);
         EXPECT_EQ(s.mStaticFacesDone, 0);
         EXPECT_EQ(advanceSlot(s, -1, false, 0.016f), -1);
+    }
+
+    TEST(SlotSelect, NonPositiveScoreExcluded)
+    {
+        std::vector<Candidate> lights{ { 1, 5.f, false }, { 2, -10.f, false }, { 3, -11.f, false }, { 4, 0.f, false } };
+        const Slots first = selectSlots(lights, sEmpty, 4);
+        EXPECT_EQ(asSet(first), (std::set<int>{ 1 }));
+        EXPECT_EQ(selectSlots(lights, first, 4), first);
+    }
+
+    TEST(PointShadowMath, CompareDepthBiasScalesWithDistance)
+    {
+        const float far = 600.f;
+        const float bias = 0.01f;
+        const auto stored = [&](float d) { return faceDepthNdc(d, far) * 0.5f + 0.5f; };
+        // an actor 250 units from a brazier shadows the floor at 300 units
+        EXPECT_GT(shadowCompareDepth(300.f, far, bias), stored(250.f));
+        // a surface never shadows itself, near or far
+        EXPECT_LT(shadowCompareDepth(300.f, far, bias), stored(300.f));
+        EXPECT_LT(shadowCompareDepth(30.f, far, bias), stored(30.f));
+        // an occluder 5% closer still casts at 550 units
+        EXPECT_GT(shadowCompareDepth(550.f, far, bias), stored(522.5f));
+    }
+
+    osg::NodePath makePath(const std::vector<unsigned int>& masks, std::vector<osg::ref_ptr<osg::Group>>& keep)
+    {
+        osg::NodePath path;
+        for (unsigned int mask : masks)
+        {
+            keep.push_back(new osg::Group);
+            keep.back()->setNodeMask(mask);
+            if (!path.empty())
+                path.back()->asGroup()->addChild(keep.back());
+            path.push_back(keep.back());
+        }
+        return path;
+    }
+
+    constexpr unsigned int sScene = 1 << 14, sActor = 1 << 3, sPlayer = 1 << 4, sObject = 1 << 10,
+                           sStatic = 1 << 11, sLighting = 1 << 19;
+
+    TEST(PointShadowMath, CarriedLightUnderActorOrPlayer)
+    {
+        std::vector<osg::ref_ptr<osg::Group>> keep;
+        EXPECT_TRUE(isCarried(makePath({ ~0u, sScene, ~0u, sActor, ~0u, sLighting }, keep), sActor | sPlayer));
+        EXPECT_TRUE(isCarried(makePath({ ~0u, sScene, sPlayer, ~0u, sLighting }, keep), sActor | sPlayer));
+        EXPECT_FALSE(isCarried(makePath({ ~0u, sScene, ~0u, sObject, ~0u, sLighting }, keep), sActor | sPlayer));
+    }
+
+    TEST(PointShadowMath, LightOwnerIsDeepestObjectOrStatic)
+    {
+        std::vector<osg::ref_ptr<osg::Group>> keep;
+        const osg::NodePath path = makePath({ ~0u, sScene, ~0u, sObject, ~0u, sLighting }, keep);
+        EXPECT_EQ(lightOwner(path, sObject | sStatic), path[3]);
+        EXPECT_EQ(lightOwner(makePath({ ~0u, sScene, ~0u, sLighting }, keep), sObject | sStatic), nullptr);
+        EXPECT_EQ(lightOwner(osg::NodePath(), sObject | sStatic), nullptr);
     }
 }

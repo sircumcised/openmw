@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <osg/Matrixf>
+#include <osg/Node>
 #include <osg/Vec2f>
 #include <osg/Vec3f>
 
@@ -39,6 +40,16 @@ namespace SceneUtil::PointShadow
 
     /// NDC depth that faceProjection(far) gives a point at axisDistance along the face's axis.
     float faceDepthNdc(float axisDistance, float far);
+
+    /// Window depth [0,1] to compare against the cube for a receiver at axisDistance; bias is a fraction of the
+    /// distance, so the margin keeps the same size in world units at any range.
+    float shadowCompareDepth(float axisDistance, float far, float bias);
+
+    /// A light under a node with a carrierMask bit (an actor or the player) moves with its carrier.
+    bool isCarried(const osg::NodePath& path, unsigned int carrierMask);
+
+    /// Deepest node with an ownerMask bit on the light's path: the lantern or sconce mesh holding the light.
+    osg::Node* lightOwner(const osg::NodePath& path, unsigned int ownerMask);
 
     osg::Matrixf faceView(int face, const osg::Vec3f& lightPos);
 

@@ -7,6 +7,7 @@
 
 #include <osg/Camera>
 #include <osg/Group>
+#include <osg/observer_ptr>
 #include <osg/Texture2D>
 #include <osg/ref_ptr>
 
@@ -68,6 +69,13 @@ namespace SceneUtil
             bool mMoved;
         };
 
+        /// Where a light hangs in the scene, looked up once per light.
+        struct LightOrigin
+        {
+            bool mCarried;
+            osg::observer_ptr<osg::Node> mOwner;
+        };
+
         osg::ref_ptr<osg::Texture2D> createDepthAtlas(int resolution) const;
         osg::ref_ptr<osg::StateSet> createCastingStateSet(
             const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager) const;
@@ -90,13 +98,15 @@ namespace SceneUtil
         osg::ref_ptr<osg::Texture2D> mStaticMaps;
         osg::ref_ptr<osg::Texture2D> mDynamicMaps;
         osg::ref_ptr<osg::StateSet> mCastingStateSet;
-        osg::ref_ptr<osg::Group> mCasterRoot;
+        osg::ref_ptr<osg::StateSet> mShadowsBinStateSet;
+        osg::ref_ptr<osg::Callback> mCasterCallback;
         osg::ref_ptr<osg::Callback> mCullCallback;
         std::array<std::array<osg::ref_ptr<osg::Camera>, 6>, PointShadow::sMaxSlots> mStaticCameras;
         std::array<std::array<osg::ref_ptr<osg::Camera>, 6>, PointShadow::sMaxSlots> mDynamicCameras;
         std::array<osg::ref_ptr<osg::StateSet>, 2> mUniformStateSets;
         std::array<PointShadow::SlotState, PointShadow::sMaxSlots> mSlots;
         std::unordered_map<int, osg::Vec3f> mLastPositions;
+        std::unordered_map<int, LightOrigin> mOrigins;
         double mLastTime = -1.0;
     };
 }

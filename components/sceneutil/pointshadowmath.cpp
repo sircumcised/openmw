@@ -45,7 +45,7 @@ namespace SceneUtil::PointShadow
     {
         std::vector<Candidate> ranked;
         for (const Candidate& light : lights)
-            if (!light.mMoved)
+            if (!light.mMoved && light.mScore > 0.f) // negative (darkness) lights would swap slots every frame
                 ranked.push_back(light);
         std::sort(ranked.begin(), ranked.end(), [](const Candidate& a, const Candidate& b) {
             return a.mScore != b.mScore ? a.mScore > b.mScore : a.mId < b.mId;
@@ -126,6 +126,34 @@ namespace SceneUtil::PointShadow
     float faceDepthNdc(float axisDistance, float far)
     {
         return (far + 1.f) / (far - 1.f) - 2.f * far / ((far - 1.f) * axisDistance);
+    }
+
+    float shadowCompareDepth(float axisDistance, float far, float bias)
+    {
+        return faceDepthNdc(std::max(axisDistance * (1.f - bias), 1.f), far) * 0.5f + 0.5f;
+    }
+
+    namespace
+    {
+        // Plain groups keep the default mask ~0; only nodes given an explicit mask say what they are.
+        bool hasCategory(const osg::Node* node, unsigned int mask)
+        {
+            return node->getNodeMask() != ~0u && (node->getNodeMask() & mask);
+        }
+    }
+
+    bool isCarried(const osg::NodePath& path, unsigned int carrierMask)
+    {
+        return std::any_of(
+            path.begin(), path.end(), [&](const osg::Node* node) { return hasCategory(node, carrierMask); });
+    }
+
+    osg::Node* lightOwner(const osg::NodePath& path, unsigned int ownerMask)
+    {
+        for (auto it = path.rbegin(); it != path.rend(); ++it)
+            if (hasCategory(*it, ownerMask))
+                return *it;
+        return nullptr;
     }
 
     osg::Matrixf faceView(int face, const osg::Vec3f& lightPos)

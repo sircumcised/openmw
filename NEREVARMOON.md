@@ -48,7 +48,7 @@ objects, actors and the player. Off by default; `[Shadows]` settings:
 - `point shadow lights = 4`: lights with a shadow at once (1 to 4), picked each frame by
   radius x intensity / distance, a newcomer needs 20% more than the light it replaces.
 - `point shadow resolution = 512`: size of each cube face.
-- `point shadow bias = 0.002`, `point shadow normal offset = 1.0`: against shadow acne.
+- `point shadow bias = 0.01` (fraction of the distance), `point shadow normal offset = 1.0`: against shadow acne.
 - `point shadow debug = false`: tints each shadowed light red, green, blue, yellow.
 
 Limits: interiors only; moving lights (a torch carried by the player or an NPC) cast none; an item
