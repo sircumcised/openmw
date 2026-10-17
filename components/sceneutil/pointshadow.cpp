@@ -79,8 +79,8 @@ namespace SceneUtil
         mDynamicUnit = mStaticUnit + 1;
 
         const int resolution = settings.mPointShadowResolution;
-        mStaticMaps = createDepthArray(resolution);
-        mDynamicMaps = createDepthArray(resolution);
+        mStaticMaps = createDepthAtlas(resolution);
+        mDynamicMaps = createDepthAtlas(resolution);
 
         osg::StateSet* stateset = mRootNode->getOrCreateStateSet();
         stateset->setTextureAttribute(mStaticUnit, mStaticMaps, osg::StateAttribute::ON);
@@ -100,9 +100,8 @@ namespace SceneUtil
         for (int slot = 0; slot < PointShadow::sMaxSlots; ++slot)
             for (int face = 0; face < 6; ++face)
             {
-                const unsigned int layer = static_cast<unsigned int>(slot * 6 + face);
-                mStaticCameras[slot][face] = createCamera(mStaticMaps, layer, mStaticMask, resolution);
-                mDynamicCameras[slot][face] = createCamera(mDynamicMaps, layer, mDynamicMask, resolution);
+                mStaticCameras[slot][face] = createCamera(mStaticMaps, slot, face, mStaticMask, resolution);
+                mDynamicCameras[slot][face] = createCamera(mDynamicMaps, slot, face, mDynamicMask, resolution);
             }
 
         for (auto& uniforms : mUniformStateSets)
@@ -129,10 +128,10 @@ namespace SceneUtil
             stateset->removeUniform(uniform.first);
     }
 
-    osg::ref_ptr<osg::Texture2DArray> PointShadowManager::createDepthArray(int resolution) const
+    osg::ref_ptr<osg::Texture2D> PointShadowManager::createDepthAtlas(int resolution) const
     {
-        osg::ref_ptr<osg::Texture2DArray> texture = new osg::Texture2DArray;
-        texture->setTextureSize(resolution, resolution, PointShadow::sMaxSlots * 6);
+        osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+        texture->setTextureSize(resolution * 6, resolution * PointShadow::sMaxSlots);
         texture->setInternalFormat(GL_DEPTH_COMPONENT32F);
         texture->setSourceFormat(GL_DEPTH_COMPONENT);
         texture->setSourceType(GL_FLOAT);
@@ -178,7 +177,7 @@ namespace SceneUtil
     }
 
     osg::ref_ptr<osg::Camera> PointShadowManager::createCamera(
-        osg::Texture2DArray* target, unsigned int layer, unsigned int cullMask, int resolution) const
+        osg::Texture2D* target, int slot, int face, unsigned int cullMask, int resolution) const
     {
         osg::ref_ptr<osg::Camera> camera = new osg::Camera;
         camera->setName("PointShadowCamera");
@@ -188,13 +187,14 @@ namespace SceneUtil
         camera->setComputeNearFarMode(osg::Camera::DO_NOT_COMPUTE_NEAR_FAR);
         camera->setCullingMode(camera->getCullingMode() & ~osg::CullSettings::SMALL_FEATURE_CULLING);
         camera->setCullMask(cullMask);
-        camera->setViewport(0, 0, resolution, resolution);
+        // The clear is scissored to the viewport, so each face only resets its own tile.
+        camera->setViewport(face * resolution, slot * resolution, resolution, resolution);
         camera->setClearMask(GL_DEPTH_BUFFER_BIT);
         camera->setClearDepth(1.0);
         camera->setImplicitBufferAttachmentMask(0, 0);
         camera->setDrawBuffer(GL_NONE);
         camera->setReadBuffer(GL_NONE);
-        camera->attach(osg::Camera::DEPTH_BUFFER, target, 0, layer);
+        camera->attach(osg::Camera::DEPTH_BUFFER, target);
         camera->setStateSet(mCastingStateSet);
         camera->addChild(mCasterRoot);
         return camera;

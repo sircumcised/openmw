@@ -6,7 +6,7 @@
 
 #include <osg/Camera>
 #include <osg/Group>
-#include <osg/Texture2DArray>
+#include <osg/Texture2D>
 #include <osg/ref_ptr>
 
 #include <components/shader/shadermanager.hpp>
@@ -27,8 +27,9 @@ namespace SceneUtil
 {
     class LightManager;
 
-    /// Indoor shadows cast by the strongest point lights: one depth cube (6 layers of a Texture2DArray) per slot,
-    /// statics cached per light, actors re-rendered each frame.
+    /// Indoor shadows cast by the strongest point lights: one depth cube per slot, statics cached per light, actors
+    /// re-rendered each frame. Each map is a 2D atlas, 6 faces wide and 4 slots high, so the shaders need no texture
+    /// array extension.
     class PointShadowManager
     {
     public:
@@ -66,11 +67,11 @@ namespace SceneUtil
             bool mMoved;
         };
 
-        osg::ref_ptr<osg::Texture2DArray> createDepthArray(int resolution) const;
+        osg::ref_ptr<osg::Texture2D> createDepthAtlas(int resolution) const;
         osg::ref_ptr<osg::StateSet> createCastingStateSet(
             const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager) const;
         osg::ref_ptr<osg::Camera> createCamera(
-            osg::Texture2DArray* target, unsigned int layer, unsigned int cullMask, int resolution) const;
+            osg::Texture2D* target, int slot, int face, unsigned int cullMask, int resolution) const;
         osg::ref_ptr<osg::StateSet> createUniformStateSet() const;
         void cullCamera(osg::Camera& camera, int face, const osg::Vec3f& lightPos, float far, unsigned int mask,
             osgUtil::CullVisitor* cv) const;
@@ -85,8 +86,8 @@ namespace SceneUtil
         int mStaticUnit = -1;
         int mDynamicUnit = -1;
         int mMaxSlots = 0;
-        osg::ref_ptr<osg::Texture2DArray> mStaticMaps;
-        osg::ref_ptr<osg::Texture2DArray> mDynamicMaps;
+        osg::ref_ptr<osg::Texture2D> mStaticMaps;
+        osg::ref_ptr<osg::Texture2D> mDynamicMaps;
         osg::ref_ptr<osg::StateSet> mCastingStateSet;
         osg::ref_ptr<osg::Group> mCasterRoot;
         osg::ref_ptr<osg::Callback> mCullCallback;
