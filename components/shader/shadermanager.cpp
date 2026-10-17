@@ -716,7 +716,7 @@ namespace Shader
             case Slot::ShadowMaps:
                 slotDescr = "shadow maps";
                 break;
-            case Slot::PointShadowMaps:
+            case Slot::PointShadowMaps: // NerevarMoon
                 slotDescr = "point shadow maps";
                 break;
             default:

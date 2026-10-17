@@ -136,7 +136,7 @@ namespace SceneUtil
         mShadowTechnique->setupCastingShader(shaderManager);
         mShadowTechnique->setWorldMask(worldMask);
 
-        if (lightManager)
+        if (lightManager) // NerevarMoon: point light shadows
             mPointShadowManager = std::make_unique<PointShadowManager>(rootNode, *lightManager, pointShadowStaticMask,
                 pointShadowDynamicMask, mShadowTechnique->getOrCreateShadowsBinStateSet(), settings, shaderManager);
 
@@ -153,6 +153,7 @@ namespace SceneUtil
 
     Shader::ShaderManager::DefineMap ShadowManager::getShadowDefines(const Settings::ShadowsCategory& settings) const
     {
+        // NerevarMoon: point shadow defines exist in every map, so no shader meets an undefined @define
         Shader::ShaderManager::DefineMap pointDefines = mPointShadowManager
             ? mPointShadowManager->getDefines(settings)
             : PointShadowManager::getDisabledDefines();
@@ -208,7 +209,7 @@ namespace SceneUtil
 
         definesWithoutShadows["limitShadowMapDistance"] = "0";
 
-        for (const auto& [name, value] : PointShadowManager::getDisabledDefines())
+        for (const auto& [name, value] : PointShadowManager::getDisabledDefines()) // NerevarMoon
             definesWithoutShadows[name] = value;
 
         return definesWithoutShadows;
@@ -220,7 +221,7 @@ namespace SceneUtil
             mShadowSettings->setCastsShadowTraversalMask(mIndoorShadowCastingMask);
         else
             mShadowTechnique->disableShadows(true);
-        if (mPointShadowManager)
+        if (mPointShadowManager) // NerevarMoon
             mPointShadowManager->setActive(true);
     }
 
@@ -229,7 +230,7 @@ namespace SceneUtil
         if (mEnableShadows)
             mShadowTechnique->enableShadows();
         mShadowSettings->setCastsShadowTraversalMask(mOutdoorShadowCastingMask);
-        if (mPointShadowManager)
+        if (mPointShadowManager) // NerevarMoon
             mPointShadowManager->setActive(false);
     }
 }

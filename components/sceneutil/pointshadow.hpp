@@ -1,3 +1,4 @@
+// NerevarMoon: indoor point light shadows.
 #ifndef OPENMW_COMPONENTS_SCENEUTIL_POINTSHADOW_H
 #define OPENMW_COMPONENTS_SCENEUTIL_POINTSHADOW_H
 

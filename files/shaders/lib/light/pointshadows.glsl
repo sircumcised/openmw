@@ -1,7 +1,7 @@
 #ifndef LIB_LIGHT_POINTSHADOWS
 #define LIB_LIGHT_POINTSHADOWS
 
-// Indoor point light shadows (components/sceneutil/pointshadow.cpp). Each depth map is an atlas of 6 faces x 4 slots.
+// NerevarMoon: indoor point light shadows (components/sceneutil/pointshadow.cpp). Each depth map is an atlas of 6 faces x 4 slots.
 
 #if @pointShadows
 

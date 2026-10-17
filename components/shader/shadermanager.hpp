@@ -80,7 +80,7 @@ namespace Shader
             OpaqueDepthTexture,
             SkyTexture,
             ShadowMaps,
-            PointShadowMaps,
+            PointShadowMaps, // NerevarMoon
             SLOT_COUNT
         };
 

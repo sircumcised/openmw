@@ -184,7 +184,7 @@ namespace MWRender
 
         mShadowManager = std::make_unique<SceneUtil::ShadowManager>(sceneRoot, mRootNode, shadowCastingTraversalMask,
             indoorShadowCastingTraversalMask, Mask_Terrain | Mask_Object | Mask_Static, Settings::shadows(),
-            mResourceSystem->getSceneManager()->getShaderManager(), sceneRoot.get(),
+            mResourceSystem->getSceneManager()->getShaderManager(), sceneRoot.get(), // NerevarMoon: point shadows
             Mask_Scene | Mask_Object | Mask_Static, Mask_Scene | Mask_Actor | Mask_Player);
 
         Shader::ShaderManager::DefineMap globalDefines = Shader::getDefaultDefines();

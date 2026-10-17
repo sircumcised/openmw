@@ -2,7 +2,7 @@
 #define LIB_LIGHT_LIGHTING
 
 #include "lighting_util.glsl"
-#include "pointshadows.glsl"
+#include "pointshadows.glsl" // NerevarMoon
 
 float calcLambert(vec3 viewNormal, vec3 lightDir, vec3 viewDir)
 {
@@ -77,7 +77,7 @@ void doLighting(vec3 viewPos, vec3 viewNormal, float shininess, out vec3 diffuse
         float illumination = lcalcIllumination(lightIndex, lightDistance);
         ambientLight += lcalcAmbient(lightIndex) * illumination;
 #if PER_PIXEL_LIGHTING
-        // point light shadows: diffuse and specular only, ambient fill stays
+        // NerevarMoon point light shadows: diffuse and specular only, ambient fill stays
         illumination *= nmPointShadow(lightIndex, viewPos, viewNormal);
 #endif
         vec3 pointDiffuse = lcalcDiffuse(lightIndex);

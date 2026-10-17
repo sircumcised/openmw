@@ -37,7 +37,7 @@ namespace SceneUtil
         explicit ShadowManager(osg::ref_ptr<osg::Group> sceneRoot, osg::ref_ptr<osg::Group> rootNode,
             unsigned int outdoorShadowCastingMask, unsigned int indoorShadowCastingMask, unsigned int worldMask,
             const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager,
-            LightManager* lightManager = nullptr, unsigned int pointShadowStaticMask = 0,
+            LightManager* lightManager = nullptr, unsigned int pointShadowStaticMask = 0, // NerevarMoon
             unsigned int pointShadowDynamicMask = 0); ///< point shadow masks include the scene root's mask
         ~ShadowManager();
 
@@ -63,7 +63,7 @@ namespace SceneUtil
         unsigned int mOutdoorShadowCastingMask;
         unsigned int mIndoorShadowCastingMask;
 
-        std::unique_ptr<PointShadowManager> mPointShadowManager;
+        std::unique_ptr<PointShadowManager> mPointShadowManager; // NerevarMoon
     };
 }
 

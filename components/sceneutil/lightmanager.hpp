@@ -256,7 +256,7 @@ namespace SceneUtil
 
         auto& getLightIndexMap(size_t frameNum) { return mLightIndexMaps[frameNum % 2]; }
 
-        const std::vector<LightSourceTransform>& getLights() const { return mLights; }
+        const std::vector<LightSourceTransform>& getLights() const { return mLights; } // NerevarMoon
 
         auto& getUBOManager() { return mUBOManager; }
 
