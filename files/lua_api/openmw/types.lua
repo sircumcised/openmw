@@ -199,6 +199,11 @@
 -- @param openmw.core#GameObject actor
 
 ---
+-- NerevarMoon: true when the engine honours `controls.use` = Chop/Slash/Thrust for the player too
+-- (stock OpenMW picks the player's attack from movement or the best attack). nil on stock OpenMW.
+-- @field [parent=#Actor] #boolean playerUsesAttackType
+
+---
 -- Is the actor in water. Can be called only from a local script.
 -- @function [parent=#Actor] isSwimming
 -- @param openmw.core#GameObject actor

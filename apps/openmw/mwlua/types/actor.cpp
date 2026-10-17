@@ -399,6 +399,8 @@ namespace MWLua
                 },
                 "CancelAttackAction");
         };
+        // marker for scripts: controls.use = Chop/Slash/Thrust picks the player's attack (character.cpp)
+        actor["playerUsesAttackType"] = true;
         // ----------------------------------------------------------------------------------------------
         actor["isSwimming"]
             = [](const LObject& o) { return MWBase::Environment::get().getWorld()->isSwimming(o.ptr()); };

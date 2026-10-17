@@ -1676,7 +1676,12 @@ namespace MWMechanics
                             mAttackType = "shoot";
                         else if (mPtr == getPlayer())
                         {
-                            if (Settings::game().mBestAttack)
+                            // NerevarMoon: a specific type set by Lua (controls.use = Chop/Slash/Thrust) wins
+                            if (!getDesiredAttackType().empty())
+                            {
+                                mAttackType = getDesiredAttackType();
+                            }
+                            else if (Settings::game().mBestAttack)
                             {
                                 if (!mWeapon.isEmpty() && mWeapon.getType() == ESM::Weapon::sRecordId)
                                 {
