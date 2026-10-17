@@ -138,7 +138,7 @@ namespace SceneUtil
 
         if (lightManager)
             mPointShadowManager = std::make_unique<PointShadowManager>(rootNode, *lightManager, pointShadowStaticMask,
-                pointShadowDynamicMask, settings, shaderManager);
+                pointShadowDynamicMask, mShadowTechnique->getOrCreateShadowsBinStateSet(), settings, shaderManager);
 
         enableOutdoorMode();
 

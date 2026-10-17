@@ -38,7 +38,7 @@ namespace SceneUtil
             unsigned int outdoorShadowCastingMask, unsigned int indoorShadowCastingMask, unsigned int worldMask,
             const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager,
             LightManager* lightManager = nullptr, unsigned int pointShadowStaticMask = 0,
-            unsigned int pointShadowDynamicMask = 0);
+            unsigned int pointShadowDynamicMask = 0); ///< point shadow masks include the scene root's mask
         ~ShadowManager();
 
         void setupShadowSettings(const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager);

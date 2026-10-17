@@ -138,4 +138,32 @@ namespace SceneUtil::PointShadow
     {
         return osg::Matrixf::perspective(90.0, 1.0, 1.0, far);
     }
+
+    int advanceSlot(SlotState& s, int targetId, bool currentPresent, float dt)
+    {
+        constexpr float fadeTime = 0.3f;
+        if (targetId != s.mLightId)
+        {
+            if (s.mLightId != -1 && currentPresent)
+            {
+                s.mLeaving = true;
+                s.mFade -= dt / fadeTime;
+                if (s.mFade > 1e-5f)
+                    return -1;
+            }
+            s = SlotState{ targetId };
+        }
+        if (s.mLightId == -1)
+            return -1;
+        if (s.mStaticFacesDone < 6)
+            return s.mStaticFacesDone++;
+        s.mLeaving = false;
+        s.mFade = std::min(1.f, s.mFade + dt / fadeTime);
+        return -1;
+    }
+
+    void deactivate(SlotState& s)
+    {
+        s = SlotState{};
+    }
 }

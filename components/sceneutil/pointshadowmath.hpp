@@ -42,6 +42,20 @@ namespace SceneUtil::PointShadow
     osg::Matrixf faceView(int face, const osg::Vec3f& lightPos);
 
     osg::Matrixf faceProjection(float far);
+
+    struct SlotState
+    {
+        int mLightId = -1;
+        int mStaticFacesDone = 0;
+        float mFade = 0.f;
+        bool mLeaving = false;
+    };
+
+    /// Moves a slot one frame towards targetId; returns the static face (0..5) to render this frame, or -1.
+    /// currentPresent: the slot's current light still exists in the scene (a vanished light swaps without fading).
+    int advanceSlot(SlotState& s, int targetId, bool currentPresent, float dt);
+
+    void deactivate(SlotState& s);
 }
 
 #endif

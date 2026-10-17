@@ -184,8 +184,8 @@ namespace MWRender
 
         mShadowManager = std::make_unique<SceneUtil::ShadowManager>(sceneRoot, mRootNode, shadowCastingTraversalMask,
             indoorShadowCastingTraversalMask, Mask_Terrain | Mask_Object | Mask_Static, Settings::shadows(),
-            mResourceSystem->getSceneManager()->getShaderManager(), sceneRoot.get(), Mask_Object | Mask_Static,
-            Mask_Actor | Mask_Player);
+            mResourceSystem->getSceneManager()->getShaderManager(), sceneRoot.get(),
+            Mask_Scene | Mask_Object | Mask_Static, Mask_Scene | Mask_Actor | Mask_Player);
 
         Shader::ShaderManager::DefineMap globalDefines = Shader::getDefaultDefines();
         Shader::ShaderManager::DefineMap shadowDefines = mShadowManager->getShadowDefines(Settings::shadows());

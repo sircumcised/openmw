@@ -144,4 +144,58 @@ namespace
         EXPECT_EQ(faceOf(osg::Vec3f(0, 0, 1), uv), 4);
         EXPECT_EQ(faceOf(osg::Vec3f(1, 1, 1), uv), 0);
     }
+
+    TEST(SlotState, BuildsOneFacePerFrame)
+    {
+        SlotState s;
+        for (int face = 0; face < 6; ++face)
+        {
+            EXPECT_EQ(advanceSlot(s, 3, false, 0.016f), face);
+            EXPECT_FLOAT_EQ(s.mFade, 0.f);
+        }
+        EXPECT_EQ(s.mLightId, 3);
+        EXPECT_EQ(advanceSlot(s, 3, true, 0.016f), -1);
+    }
+
+    TEST(SlotState, FadesInOver300ms)
+    {
+        SlotState s;
+        for (int face = 0; face < 6; ++face)
+            advanceSlot(s, 3, true, 0.1f);
+        for (int i = 0; i < 3; ++i)
+            EXPECT_EQ(advanceSlot(s, 3, true, 0.1f), -1);
+        EXPECT_NEAR(s.mFade, 1.f, 1e-5f);
+    }
+
+    TEST(SlotState, LeavingFadesOutThenSwaps)
+    {
+        SlotState s{ 3, 6, 1.f, false };
+        EXPECT_EQ(advanceSlot(s, 8, true, 0.1f), -1);
+        EXPECT_TRUE(s.mLeaving);
+        EXPECT_EQ(s.mLightId, 3);
+        EXPECT_EQ(advanceSlot(s, 8, true, 0.1f), -1);
+        EXPECT_EQ(advanceSlot(s, 8, true, 0.1f), 0);
+        EXPECT_EQ(s.mLightId, 8);
+        EXPECT_FALSE(s.mLeaving);
+        EXPECT_FLOAT_EQ(s.mFade, 0.f);
+    }
+
+    TEST(SlotState, RemovedLightSwapsAtOnce)
+    {
+        SlotState s{ 3, 6, 1.f, false };
+        EXPECT_EQ(advanceSlot(s, 8, false, 0.1f), 0);
+        EXPECT_EQ(s.mLightId, 8);
+        EXPECT_FLOAT_EQ(s.mFade, 0.f);
+    }
+
+    TEST(SlotState, DeactivateResets)
+    {
+        SlotState s;
+        advanceSlot(s, 3, true, 0.016f);
+        advanceSlot(s, 3, true, 0.016f);
+        deactivate(s);
+        EXPECT_EQ(s.mLightId, -1);
+        EXPECT_EQ(s.mStaticFacesDone, 0);
+        EXPECT_EQ(advanceSlot(s, -1, false, 0.016f), -1);
+    }
 }
