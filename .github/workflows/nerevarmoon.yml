@@ -18,6 +18,8 @@ on:
   push:
     branches:
       - nerevarmoon
+      # NerevarMoon: feature branch builds (workflow_dispatch needs the file on master, which lacks it)
+      - nm-pointshadows
 
 jobs:
   Windows:
