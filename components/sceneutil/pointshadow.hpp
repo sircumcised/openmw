@@ -95,6 +95,7 @@ namespace SceneUtil
         int mStaticUnit = -1;
         int mDynamicUnit = -1;
         int mMaxSlots = 0;
+        float mNear = 48.f;
         osg::ref_ptr<osg::Texture2D> mStaticMaps;
         osg::ref_ptr<osg::Texture2D> mDynamicMaps;
         osg::ref_ptr<osg::StateSet> mCastingStateSet;

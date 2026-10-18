@@ -43,19 +43,27 @@ void nmPointShadowFace(vec3 dir, out int face, out vec2 uv, out float axisDistan
     uv = vec2(dot(dir, right), dot(dir, up)) / axisDistance * 0.5 + 0.5;
 }
 
+// Soft edges: 12 Poisson taps over a 2-texel radius (16 bilinear compares each, 48 texels wide at 512).
 float nmSamplePointShadow(sampler2DShadow map, int slot, int face, vec2 uv, float ref)
 {
     float texel = 1.0 / @pointShadowResolution;
-    // keep the 4 linear-filtered taps inside this face's tile
-    uv = clamp(uv, vec2(1.5 * texel), vec2(1.0 - 1.5 * texel));
-    vec2 tile = vec2(float(face), float(slot));
-    vec2 scale = vec2(1.0 / 6.0, 0.25);
-    float o = 0.5 * texel;
-    float sum = shadow2D(map, vec3((tile + uv + vec2(-o, -o)) * scale, ref)).r;
-    sum += shadow2D(map, vec3((tile + uv + vec2(o, -o)) * scale, ref)).r;
-    sum += shadow2D(map, vec3((tile + uv + vec2(-o, o)) * scale, ref)).r;
-    sum += shadow2D(map, vec3((tile + uv + vec2(o, o)) * scale, ref)).r;
-    return sum * 0.25;
+    // keep every tap inside this face's tile
+    uv = clamp(uv, vec2(2.5 * texel), vec2(1.0 - 2.5 * texel));
+    vec2 base = (vec2(float(face), float(slot)) + uv) * vec2(1.0 / 6.0, 0.25);
+    vec2 r = vec2(2.0 * texel / 6.0, 2.0 * texel * 0.25);
+    float sum = shadow2D(map, vec3(base + vec2(-0.326, -0.406) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(-0.840, -0.074) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(-0.696, 0.457) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(-0.203, 0.621) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(0.962, -0.195) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(0.473, -0.480) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(0.519, 0.767) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(0.185, -0.893) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(0.507, 0.064) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(0.896, 0.412) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(-0.322, -0.933) * r, ref)).r;
+    sum += shadow2D(map, vec3(base + vec2(-0.792, -0.598) * r, ref)).r;
+    return sum / 12.0;
 }
 
 // Visibility (0..1) of the point light at LightBuffer index lightIndex; 1 for lights without a shadow slot.
@@ -77,7 +85,7 @@ float nmPointShadow(int lightIndex, vec3 viewPos, vec3 viewNormal)
         nmPointShadowFace(worldPos - nmShadowLightPos[slot], face, uv, axisDistance);
 
         float farPlane = nmShadowFar[slot];
-        float nearPlane = @pointShadowNear; // PointShadow::sNearPlane: casters hugging the light never cast
+        float nearPlane = @pointShadowNear; // "point shadow near": casters around the light never cast
         // bias as a fraction of the distance (PointShadow::shadowCompareDepth), same world margin at any range
         float biased = axisDistance * (1.0 - @pointShadowBias);
         if (axisDistance >= farPlane || biased <= nearPlane)
@@ -89,6 +97,8 @@ float nmPointShadow(int lightIndex, vec3 viewPos, vec3 viewNormal)
         float visibility = nmSamplePointShadow(nmPointShadowStatic, slot, face, uv, ref);
         if (nmDynFaces[slot] != 0)
             visibility *= nmSamplePointShadow(nmPointShadowDynamic, slot, face, uv, ref);
+        // "point shadow strength" (PointShadow::applyStrength): a shadowed receiver keeps 1 - strength of the light
+        visibility = 1.0 - @pointShadowStrength * (1.0 - visibility);
         return mix(1.0, visibility, nmShadowFade[slot]);
     }
     return 1.0;

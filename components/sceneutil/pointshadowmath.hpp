@@ -15,10 +15,6 @@ namespace SceneUtil::PointShadow
 {
     constexpr int sMaxSlots = 4;
 
-    /// Casters closer than this (units, ~22 cm) are skipped: the lamp's housing, bracket and the pipe it hangs on
-    /// would otherwise fill the side faces and let light out only through the open top and bottom.
-    constexpr float sNearPlane = 16.f;
-
     /// LightSource ids per shadow slot, -1 = empty
     using Slots = std::array<int, sMaxSlots>;
 
@@ -37,17 +33,21 @@ namespace SceneUtil::PointShadow
     /// Maps slot ids to LightBuffer indices of this frame, -1 when the light has no index.
     std::array<int, sMaxSlots> toBufferIndices(const Slots& slots, const std::unordered_map<int, int>& indexMap);
 
-    float farPlane(float lightRadius);
+    /// 2 x radius, at least 2 x near, at most 16384
+    float farPlane(float lightRadius, float near);
 
     /// Cube face (0..5 = +X, -X, +Y, -Y, +Z, -Z) seen along dir, and the [0,1] texture coordinates on it.
     int faceOf(const osg::Vec3f& dir, osg::Vec2f& uv);
 
-    /// NDC depth that faceProjection(far) gives a point at axisDistance along the face's axis (near = sNearPlane).
-    float faceDepthNdc(float axisDistance, float far);
+    /// NDC depth that faceProjection(near, far) gives a point at axisDistance along the face's axis.
+    float faceDepthNdc(float axisDistance, float near, float far);
 
     /// Window depth [0,1] to compare against the cube for a receiver at axisDistance; bias is a fraction of the
     /// distance, so the margin keeps the same size in world units at any range. Inside the near plane: 0 (lit).
-    float shadowCompareDepth(float axisDistance, float far, float bias);
+    float shadowCompareDepth(float axisDistance, float near, float far, float bias);
+
+    /// "point shadow strength": the light a fully shadowed receiver keeps is 1 - strength.
+    float applyStrength(float visibility, float strength);
 
     /// A light under a node with a carrierMask bit (an actor or the player) moves with its carrier.
     bool isCarried(const osg::NodePath& path, unsigned int carrierMask);
@@ -57,7 +57,8 @@ namespace SceneUtil::PointShadow
 
     osg::Matrixf faceView(int face, const osg::Vec3f& lightPos);
 
-    osg::Matrixf faceProjection(float far);
+    /// 90 degree square frustum; casters nearer than near (the "point shadow near" setting) never cast
+    osg::Matrixf faceProjection(float near, float far);
 
     struct SlotState
     {

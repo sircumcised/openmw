@@ -102,9 +102,9 @@ namespace SceneUtil::PointShadow
         return result;
     }
 
-    float farPlane(float lightRadius)
+    float farPlane(float lightRadius, float near)
     {
-        return std::clamp(2.f * lightRadius, 2.f * sNearPlane, 16384.f);
+        return std::clamp(2.f * lightRadius, 2.f * near, 16384.f);
     }
 
     int faceOf(const osg::Vec3f& dir, osg::Vec2f& uv)
@@ -123,18 +123,22 @@ namespace SceneUtil::PointShadow
         return face;
     }
 
-    float faceDepthNdc(float axisDistance, float far)
+    float faceDepthNdc(float axisDistance, float near, float far)
     {
-        const float n = sNearPlane;
-        return (far + n) / (far - n) - 2.f * far * n / ((far - n) * axisDistance);
+        return (far + near) / (far - near) - 2.f * far * near / ((far - near) * axisDistance);
     }
 
-    float shadowCompareDepth(float axisDistance, float far, float bias)
+    float shadowCompareDepth(float axisDistance, float near, float far, float bias)
     {
         const float biased = axisDistance * (1.f - bias);
-        if (biased <= sNearPlane)
+        if (biased <= near)
             return 0.f;
-        return faceDepthNdc(biased, far) * 0.5f + 0.5f;
+        return faceDepthNdc(biased, near, far) * 0.5f + 0.5f;
+    }
+
+    float applyStrength(float visibility, float strength)
+    {
+        return 1.f - strength * (1.f - visibility);
     }
 
     namespace
@@ -166,9 +170,9 @@ namespace SceneUtil::PointShadow
         return osg::Matrixf::lookAt(lightPos, lightPos + f.mForward, f.mUp);
     }
 
-    osg::Matrixf faceProjection(float far)
+    osg::Matrixf faceProjection(float near, float far)
     {
-        return osg::Matrixf::perspective(90.0, 1.0, sNearPlane, far);
+        return osg::Matrixf::perspective(90.0, 1.0, near, far);
     }
 
     int advanceSlot(SlotState& s, int targetId, bool currentPresent, float dt)

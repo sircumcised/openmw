@@ -101,22 +101,31 @@ namespace
 
     TEST(PointShadowMath, FarPlaneClamped)
     {
-        EXPECT_FLOAT_EQ(farPlane(0.f), 2.f * sNearPlane);
-        EXPECT_FLOAT_EQ(farPlane(100.f), 200.f);
-        EXPECT_FLOAT_EQ(farPlane(1e6f), 16384.f);
+        EXPECT_FLOAT_EQ(farPlane(0.f, 48.f), 96.f);
+        EXPECT_FLOAT_EQ(farPlane(100.f, 48.f), 200.f);
+        EXPECT_FLOAT_EQ(farPlane(1e6f, 48.f), 16384.f);
     }
 
-    // geometry hugging the light (lamp housing, bracket, the pipe a Dwemer lamp hangs on) must never cast:
-    // the near plane sits 16 units (~22 cm) out, and a receiver inside it reads as lit
-    TEST(PointShadowMath, NearPlaneSkipsGeometryHuggingTheLight)
+    // Morrowind places lights inside their fixtures (the pipe a Dwemer lamp is threaded on, brackets, poles):
+    // casters nearer than the "point shadow near" setting never cast, and a receiver inside it reads as lit
+    TEST(PointShadowMath, NearPlaneSkipsGeometryAroundTheLight)
     {
-        EXPECT_FLOAT_EQ(sNearPlane, 16.f);
-        EXPECT_NEAR(faceDepthNdc(sNearPlane, 512.f), -1.f, 1e-5f);
-        EXPECT_NEAR(faceDepthNdc(512.f, 512.f), 1.f, 1e-5f);
-        const osg::Vec4f clip = osg::Vec4f(sNearPlane * 0.5f, 0.f, 0.f, 1.f) * faceView(0, osg::Vec3f())
-            * faceProjection(512.f);
-        EXPECT_LT(clip.z() / clip.w(), -1.f); // 8 units along +X: in front of the near plane, clipped away
-        EXPECT_FLOAT_EQ(shadowCompareDepth(8.f, 512.f, 0.01f), 0.f); // receiver inside the near plane: depth 0 = lit
+        const float near = 48.f;
+        EXPECT_NEAR(faceDepthNdc(near, near, 512.f), -1.f, 1e-5f);
+        EXPECT_NEAR(faceDepthNdc(512.f, near, 512.f), 1.f, 1e-5f);
+        const osg::Vec4f clip
+            = osg::Vec4f(40.f, 0.f, 0.f, 1.f) * faceView(0, osg::Vec3f()) * faceProjection(near, 512.f);
+        EXPECT_LT(clip.z() / clip.w(), -1.f); // 40 units along +X: in front of the near plane, clipped away
+        EXPECT_FLOAT_EQ(shadowCompareDepth(40.f, near, 512.f, 0.01f), 0.f); // receiver inside the near plane: lit
+    }
+
+    // "point shadow strength" 0.75: a fully shadowed receiver keeps 25% of the light, a lit one all of it
+    TEST(PointShadowMath, StrengthLeavesResidualLight)
+    {
+        EXPECT_FLOAT_EQ(applyStrength(0.f, 0.75f), 0.25f);
+        EXPECT_FLOAT_EQ(applyStrength(1.f, 0.75f), 1.f);
+        EXPECT_FLOAT_EQ(applyStrength(0.5f, 1.f), 0.5f);
+        EXPECT_FLOAT_EQ(applyStrength(0.f, 0.f), 1.f);
     }
 
     TEST(PointShadowMath, FaceOfMatchesFaceView)
@@ -136,7 +145,7 @@ namespace
             ASSERT_GE(face, 0);
             ASSERT_LT(face, 6);
             const osg::Vec3f point = lightPos + dir * 50.f;
-            const osg::Vec4f clip = osg::Vec4f(point, 1.f) * faceView(face, lightPos) * faceProjection(far);
+            const osg::Vec4f clip = osg::Vec4f(point, 1.f) * faceView(face, lightPos) * faceProjection(16.f, far);
             ASSERT_GT(clip.w(), 0.f);
             const osg::Vec3f ndc(clip.x() / clip.w(), clip.y() / clip.w(), clip.z() / clip.w());
             EXPECT_NEAR(ndc.x() * 0.5f + 0.5f, uv.x(), 1e-4f) << "face " << face;
@@ -144,7 +153,7 @@ namespace
             EXPECT_GE(ndc.z(), -1.f);
             EXPECT_LE(ndc.z(), 1.f);
             const float axisDistance = std::max({ std::abs(dir.x()), std::abs(dir.y()), std::abs(dir.z()) }) * 50.f;
-            EXPECT_NEAR(faceDepthNdc(axisDistance, far), ndc.z(), 1e-4f);
+            EXPECT_NEAR(faceDepthNdc(axisDistance, 16.f, far), ndc.z(), 1e-4f);
         }
     }
 
@@ -225,14 +234,15 @@ namespace
     {
         const float far = 600.f;
         const float bias = 0.01f;
-        const auto stored = [&](float d) { return faceDepthNdc(d, far) * 0.5f + 0.5f; };
+        const float near = 16.f;
+        const auto stored = [&](float d) { return faceDepthNdc(d, near, far) * 0.5f + 0.5f; };
         // an actor 250 units from a brazier shadows the floor at 300 units
-        EXPECT_GT(shadowCompareDepth(300.f, far, bias), stored(250.f));
+        EXPECT_GT(shadowCompareDepth(300.f, near, far, bias), stored(250.f));
         // a surface never shadows itself, near or far
-        EXPECT_LT(shadowCompareDepth(300.f, far, bias), stored(300.f));
-        EXPECT_LT(shadowCompareDepth(30.f, far, bias), stored(30.f));
+        EXPECT_LT(shadowCompareDepth(300.f, near, far, bias), stored(300.f));
+        EXPECT_LT(shadowCompareDepth(30.f, near, far, bias), stored(30.f));
         // an occluder 5% closer still casts at 550 units
-        EXPECT_GT(shadowCompareDepth(550.f, far, bias), stored(522.5f));
+        EXPECT_GT(shadowCompareDepth(550.f, near, far, bias), stored(522.5f));
     }
 
     osg::NodePath makePath(const std::vector<unsigned int>& masks, std::vector<osg::ref_ptr<osg::Group>>& keep)

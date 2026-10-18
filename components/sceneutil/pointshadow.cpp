@@ -85,6 +85,7 @@ namespace SceneUtil
         , mStaticMask(staticMask)
         , mDynamicMask(dynamicMask)
         , mMaxSlots(settings.mPointShadowLights)
+        , mNear(settings.mPointShadowNear)
     {
         if (!settings.mPointLightShadows)
             return;
@@ -247,7 +248,7 @@ namespace SceneUtil
             uniforms.getUniform("nmShadowFade")->setElement(i, 0.f);
             uniforms.getUniform("nmDynFaces")->setElement(i, 0);
             uniforms.getUniform("nmShadowLightPos")->setElement(i, osg::Vec3f());
-            uniforms.getUniform("nmShadowFar")->setElement(i, 16.f);
+            uniforms.getUniform("nmShadowFar")->setElement(i, 96.f);
         }
     }
 
@@ -267,7 +268,7 @@ namespace SceneUtil
         unsigned int mask, osgUtil::CullVisitor* cv) const
     {
         camera.setViewMatrix(PointShadow::faceView(face, lightPos));
-        camera.setProjectionMatrix(PointShadow::faceProjection(far));
+        camera.setProjectionMatrix(PointShadow::faceProjection(mNear, far));
         // The cull mask decides what casts; set it on the visitor too, whatever the camera inherits.
         const osg::Node::NodeMask savedMask = cv->getTraversalMask();
         cv->setTraversalMask(mask);
@@ -354,7 +355,7 @@ namespace SceneUtil
                 continue;
             }
             const osg::Vec3f& lightPos = info->second.mPosition;
-            const float far = PointShadow::farPlane(info->second.mRadius);
+            const float far = PointShadow::farPlane(info->second.mRadius, mNear);
             if (staticFace >= 0)
             {
                 // the lantern or sconce around the light would otherwise block it
@@ -400,7 +401,8 @@ namespace SceneUtil
             { "pointShadowResolution", std::to_string(settings.mPointShadowResolution.get()) + ".0" },
             { "pointShadowBias", std::to_string(settings.mPointShadowBias.get()) },
             { "pointShadowNormalOffset", std::to_string(settings.mPointShadowNormalOffset.get()) },
-            { "pointShadowNear", std::to_string(PointShadow::sNearPlane) },
+            { "pointShadowNear", std::to_string(settings.mPointShadowNear.get()) },
+            { "pointShadowStrength", std::to_string(settings.mPointShadowStrength.get()) },
             { "pointShadowDebug", settings.mPointShadowDebug ? "1" : "0" },
         };
     }
@@ -414,7 +416,8 @@ namespace SceneUtil
             { "pointShadowResolution", "512.0" },
             { "pointShadowBias", "0.01" },
             { "pointShadowNormalOffset", "0.0" },
-            { "pointShadowNear", "16.0" },
+            { "pointShadowNear", "48.0" },
+            { "pointShadowStrength", "0.75" },
             { "pointShadowDebug", "0" },
         };
     }

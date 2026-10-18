@@ -49,13 +49,16 @@ objects, actors and the player. Off by default; `[Shadows]` settings:
   radius x intensity / distance, a newcomer needs 20% more than the light it replaces.
 - `point shadow resolution = 512`: size of each cube face.
 - `point shadow bias = 0.01` (fraction of the distance), `point shadow normal offset = 1.0`: against shadow acne.
+- `point shadow near = 48` (units, ~67 cm): casters nearer than this to the light never cast. Morrowind
+  places lights inside their fixtures (a Dwemer lamp is threaded on its pipe, torches on poles, lamps in
+  brackets), which with a small near plane blocked most of the light (builds 12 and 13).
+- `point shadow strength = 0.75`: how dark the shadow gets; 1.0 blocks the light completely.
+- Edges: 12 Poisson taps over a 2-texel radius, soft at 512.
 - `point shadow debug = false`: tints each shadowed light red, green, blue, yellow.
 
 Limits: interiors only; moving lights (a torch carried by the player or an NPC) cast none; an item
 picked up or dropped updates its shadow only when the light changes slot or the cell changes.
-Casters within 16 units (~22 cm) of the light never cast (`PointShadow::sNearPlane`): a Dwemer lamp sits
-on its pipe inside a bracket, and with a 1-unit near plane that geometry filled the four side faces, so
-light left only through the open top and bottom (build 12 bug, fixed in build 13).
+Casters nearer than `point shadow near` never cast (see above).
 Shaders: `lib/light/pointshadows.glsl`, hooked in the point light loop of `lib/light/lighting.glsl`
 (per-pixel lighting only). A replaced `lighting.glsl` (shader packs) needs the same hook: include
 `pointshadows.glsl`, multiply the light's diffuse and specular by `nmPointShadow(lightIndex, viewPos,

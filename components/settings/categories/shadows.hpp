@@ -51,6 +51,9 @@ namespace Settings
             makeClampSanitizerFloat(0, 0.1f) };
         SettingValue<float> mPointShadowNormalOffset{ mIndex, "Shadows", "point shadow normal offset",
             makeClampSanitizerFloat(0, 10) };
+        SettingValue<float> mPointShadowNear{ mIndex, "Shadows", "point shadow near", makeClampSanitizerFloat(1, 256) };
+        SettingValue<float> mPointShadowStrength{ mIndex, "Shadows", "point shadow strength",
+            makeClampSanitizerFloat(0, 1) };
         SettingValue<bool> mPointShadowDebug{ mIndex, "Shadows", "point shadow debug" };
     };
 }
