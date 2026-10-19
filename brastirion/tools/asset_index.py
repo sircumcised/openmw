@@ -5,7 +5,8 @@ index: scans the MO2 modlist (profiles/<profile>/modlist.txt order, first line w
        libraries (--lib, above every mod) and Morrowind/Data Files (below every mod).
 find:  ranks meshes for a slot and prints REUSE / RETEXTURE / GENERATE per the asset rule in
        the design journal ("Regola asset").
-Loose files only: meshes inside BSA archives are not indexed.
+Archives come from fallback-archive= in the profile's openmw.cfg; loose files beat every archive, a later archive
+beats an earlier one.
 """
 import argparse, gzip, json, os, re, struct, sys
 
@@ -40,9 +41,10 @@ def nif_textures(data):
     return sorted(out)
 
 
-def tex_size(path):
-    with open(path, 'rb') as f:
-        h = f.read(24)
+def tex_size(path, h=None):
+    if h is None:
+        with open(path, 'rb') as f:
+            h = f.read(24)
     if h[:4] == b'DDS ' and len(h) >= 20:
         height, width = struct.unpack_from('<II', h, 12)
     elif path.lower().endswith('.tga') and len(h) >= 16:
@@ -54,10 +56,37 @@ def tex_size(path):
     return max(abs(width), abs(height))
 
 
+def bsa_files(path):
+    # Morrowind BSA: header, (size, offset) per file, name offsets, names, hashes, then the data
+    with open(path, 'rb') as f:
+        data = f.read()
+    _, hash_off, count = struct.unpack_from('<III', data, 0)
+    names_at = 12 + count * 12
+    base = 12 + hash_off + count * 8
+    for i in range(count):
+        size, off = struct.unpack_from('<II', data, 12 + i * 8)
+        name_off = struct.unpack_from('<I', data, 12 + count * 8 + i * 4)[0]
+        end = data.index(b'\0', names_at + name_off)
+        yield data[names_at + name_off:end].decode('latin-1').lower().replace('\\', '/'), data[base + off:base + off + size]
+
+
+def archives(root, profile, srcs):
+    cfg = os.path.join(root, 'profiles', profile, 'openmw.cfg')
+    if not os.path.isfile(cfg):
+        return
+    with open(cfg, encoding='utf-8-sig') as f:
+        names = [l.split('=', 1)[1].strip() for l in f if l.startswith('fallback-archive=')]
+    for name in reversed(names):
+        path = next((os.path.join(b, name) for _, _, b in srcs if os.path.isfile(os.path.join(b, name))), None)
+        if path:
+            yield name, path
+
+
 def index(args):
     old = load(args.out) if os.path.exists(args.out) else {'meshes': {}, 'textures': {}}
     meshes, textures = {}, {}
-    for name, tier, base in sources(args.root, args.profile, args.lib):
+    srcs = sources(args.root, args.profile, args.lib)
+    for name, tier, base in srcs:
         for kind in ('meshes', 'textures'):
             top = os.path.join(base, kind)
             for dirpath, _, files in os.walk(top):
@@ -68,7 +97,7 @@ def index(args):
                     entry = {'src': name, 'tier': tier, 'size': st.st_size, 'mtime': int(st.st_mtime)}
                     if kind == 'meshes' and fn.lower().endswith('.nif') and rel not in meshes:
                         prev = old['meshes'].get(rel)
-                        if prev and (prev['src'], prev['size'], prev['mtime']) == (name, st.st_size, entry['mtime']):
+                        if prev and (prev['src'], prev['size'], prev.get('mtime')) == (name, st.st_size, entry['mtime']):
                             entry['tex'] = prev['tex']
                         else:
                             with open(full, 'rb') as f:
@@ -81,6 +110,15 @@ def index(args):
                                                    and textures[key]['src'] == name):
                             entry['path'], entry['res'] = rel, tex_size(full)
                             textures[key] = entry
+    for name, path in archives(args.root, args.profile, srcs):
+        for rel, blob in bsa_files(path):
+            entry = {'src': name, 'tier': 'bsa', 'size': len(blob)}
+            if rel.startswith('meshes/') and rel.endswith('.nif') and rel not in meshes:
+                entry['tex'] = nif_textures(blob)
+                meshes[rel] = entry
+            elif rel.startswith('textures/') and rel.endswith(TEX_EXT) and tex_key(rel) not in textures:
+                entry['path'], entry['res'] = rel, tex_size(rel, blob[:24])
+                textures[tex_key(rel)] = entry
     with gzip.open(args.out, 'wt', encoding='utf-8') as f:
         json.dump({'meshes': meshes, 'textures': textures}, f)
     print(f'{len(meshes)} meshes, {len(textures)} textures -> {args.out}')
@@ -94,7 +132,7 @@ def load(path):
 def find(args):
     idx = load(args.index)
     textures, words = idx['textures'], [w.lower() for w in args.keywords]
-    tier_bonus = {'lib': 2, 'mod': 1, 'vanilla': 0}
+    tier_bonus = {'lib': 2, 'mod': 1, 'vanilla': 0, 'bsa': 0}
     ranked = []
     for rel, m in idx['meshes'].items():
         hits = sum(w in rel for w in words)
