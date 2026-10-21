@@ -308,9 +308,6 @@ namespace MWMechanics
         void forceStateUpdate();
 
         bool isAttackPreparing() const;
-
-        /// NerevarMoon: abort an attack still in its wind-up (feint). Returns false if there is nothing to cancel.
-        bool cancelAttack();
         bool isCastingSpell() const;
         bool isReadyToBlock() const;
         bool isKnockedDown() const;

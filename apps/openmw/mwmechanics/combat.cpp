@@ -76,9 +76,6 @@ namespace MWMechanics
 
         MWMechanics::CreatureStats& blockerStats = blocker.getClass().getCreatureStats(blocker);
 
-        if (!blockerStats.getEngineBlock()) // NerevarMoon: a script handles blocking for this actor
-            return false;
-
         if (blockerStats.getKnockedDown() // Used for both knockout or knockdown
             || blockerStats.getHitRecovery() || blockerStats.isParalyzed())
             return false;

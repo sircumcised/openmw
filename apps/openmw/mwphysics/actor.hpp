@@ -116,21 +116,6 @@ namespace MWPhysics
          */
         const osg::Vec3f& getInertialForce() const { return mForce; }
 
-        /**
-         * NerevarMoon: queues a one-shot velocity change (game units per second) for the next physics step.
-         * Main thread only (Lua actions). A positive Z component launches the actor like a jump; a horizontal
-         * component becomes a slide that ground friction damps (see MovementSolver::move).
-         */
-        void addImpulse(const osg::Vec3f& impulse) { mPendingImpulse += impulse; }
-        osg::Vec3f takeImpulse()
-        {
-            const osg::Vec3f impulse = mPendingImpulse;
-            mPendingImpulse = osg::Vec3f();
-            return impulse;
-        }
-        const osg::Vec3f& getSlideVelocity() const { return mSlideVelocity; }
-        void setSlideVelocity(const osg::Vec3f& velocity) { mSlideVelocity = velocity; }
-
         void setOnGround(bool grounded);
 
         bool getOnGround() const { return mOnGround; }
@@ -198,8 +183,6 @@ namespace MWPhysics
         osg::Vec3f mLastStuckPosition;
 
         osg::Vec3f mForce;
-        osg::Vec3f mPendingImpulse; // NerevarMoon
-        osg::Vec3f mSlideVelocity; // NerevarMoon
         bool mOnGround;
         bool mOnSlope;
         bool mInternalCollisionMode;

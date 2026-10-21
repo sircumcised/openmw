@@ -1676,12 +1676,7 @@ namespace MWMechanics
                             mAttackType = "shoot";
                         else if (mPtr == getPlayer())
                         {
-                            // NerevarMoon: a specific type set by Lua (controls.use = Chop/Slash/Thrust) wins
-                            if (!getDesiredAttackType().empty())
-                            {
-                                mAttackType = getDesiredAttackType();
-                            }
-                            else if (Settings::game().mBestAttack)
+                            if (Settings::game().mBestAttack)
                             {
                                 if (!mWeapon.isEmpty() && mWeapon.getType() == ESM::Weapon::sRecordId)
                                 {
@@ -2914,21 +2909,6 @@ namespace MWMechanics
     bool CharacterController::isAttackPreparing() const
     {
         return mUpperBodyState == UpperBodyState::AttackWindUp;
-    }
-
-    bool CharacterController::cancelAttack()
-    {
-        if (mUpperBodyState != UpperBodyState::AttackWindUp || mCurrentWeapon.empty())
-            return false;
-        if (mWeaponType == ESM::Weapon::PickProbe || isRandomAttackAnimation(mCurrentWeapon))
-            return false;
-        mAnimation->disable(mCurrentWeapon);
-        mUpperBodyState = UpperBodyState::WeaponEquipped;
-        setAttackingOrSpell(false);
-        mReadyToHit = false;
-        if (mResetIdleOnAttackEnd && mIdleState != CharState_IdleSneak && mIdleState != CharState_IdleSwim)
-            resetCurrentIdleState();
-        return true;
     }
 
     bool CharacterController::isCastingSpell() const

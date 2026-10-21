@@ -39,7 +39,6 @@
 #include <components/vfs/manager.hpp>
 #include <components/vfs/pathutil.hpp>
 
-#include <components/sceneutil/bonephysics.hpp>
 #include <components/sceneutil/clone.hpp>
 #include <components/sceneutil/controller.hpp>
 #include <components/sceneutil/depth.hpp>
@@ -983,9 +982,6 @@ namespace Resource
                 Log(Debug::Error) << "Failed to load '" << path << "': " << e.what() << ", using marker_error instead";
                 loaded = cloneErrorMarker();
             }
-
-            // NerevarMoon: "<model>.physics.yaml" next to the model puts bone chains under the physics solver
-            SceneUtil::attachBonePhysics(loaded, *mVFS, path.value());
 
             // set filtering settings
             SetFilterSettingsVisitor setFilterSettingsVisitor(mMinFilter, mMagFilter, mMaxAnisotropy);

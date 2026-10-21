@@ -13,9 +13,6 @@ namespace MWPhysics
 
     static constexpr float sGroundOffset = 1.0f;
 
-    // NerevarMoon: fraction of a Lua slide impulse lost per second on the ground (see MovementSolver::move)
-    static constexpr float sSlideFriction = 6.0f;
-
     // Arbitrary number. To prevent infinite loops. They shouldn't happen but it's good to be prepared.
     static constexpr int sMaxIterations = 8;
     // Allows for more precise movement solving without getting stuck or snagging too easily.

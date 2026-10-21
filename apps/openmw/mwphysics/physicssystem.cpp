@@ -26,7 +26,6 @@
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/conversion.hpp>
 #include <components/resource/bulletshapemanager.hpp>
-#include <components/sceneutil/bonephysics.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/settings/values.hpp>
 
@@ -65,7 +64,27 @@ namespace
             return;
         if (ptr.getClass().getMovementSettings(ptr).mPosition[2] == 0)
             return;
-        MWPhysics::PhysicsSystem::applyJumpCost(ptr);
+        const bool isPlayer = (ptr == MWMechanics::getPlayer());
+        // Advance acrobatics and set flag for GetPCJumping
+        if (isPlayer)
+        {
+            ptr.getClass().skillUsageSucceeded(ptr, ESM::Skill::Acrobatics, ESM::Skill::Acrobatics_Jump);
+            MWBase::Environment::get().getWorld()->getPlayer().setJumping(true);
+        }
+
+        // Decrease fatigue
+        if (!isPlayer || !MWBase::Environment::get().getWorld()->getGodModeState())
+        {
+            const MWWorld::Store<ESM::GameSetting>& gmst
+                = MWBase::Environment::get().getESMStore()->get<ESM::GameSetting>();
+            const float fFatigueJumpBase = gmst.find("fFatigueJumpBase")->mValue.getFloat();
+            const float fFatigueJumpMult = gmst.find("fFatigueJumpMult")->mValue.getFloat();
+            const float normalizedEncumbrance = std::min(1.f, ptr.getClass().getNormalizedEncumbrance(ptr));
+            const float fatigueDecrease = fFatigueJumpBase + normalizedEncumbrance * fFatigueJumpMult;
+            MWMechanics::DynamicStat<float> fatigue = ptr.getClass().getCreatureStats(ptr).getFatigue();
+            fatigue.setCurrent(fatigue.getCurrent() - fatigueDecrease);
+            ptr.getClass().getCreatureStats(ptr).setFatigue(fatigue);
+        }
         ptr.getClass().getMovementSettings(ptr).mPosition[2] = 0;
     }
 
@@ -113,23 +132,10 @@ namespace MWPhysics
 
         mDebugDrawer = std::make_unique<MWRender::DebugDrawer>(mParentNode, mCollisionWorld.get(), mDebugDrawEnabled);
         mTaskScheduler = std::make_unique<PhysicsTaskScheduler>(mPhysicsDt, mCollisionWorld.get(), mDebugDrawer.get());
-
-        // NerevarMoon: bone chains (bonephysics) ask the world for floors and walls through this ray
-        SceneUtil::BonePhysicsController::setWorldRay(
-            [this](const osg::Vec3f& from, const osg::Vec3f& to, osg::Vec3f& hitPos, osg::Vec3f& hitNormal) {
-                const RayCastingResult result = castRay(
-                    from, to, {}, {}, CollisionType_World | CollisionType_HeightMap | CollisionType_Door);
-                if (!result.mHit)
-                    return false;
-                hitPos = result.mHitPos;
-                hitNormal = result.mHitNormal;
-                return true;
-            });
     }
 
     PhysicsSystem::~PhysicsSystem()
     {
-        SceneUtil::BonePhysicsController::setWorldRay(nullptr); // NerevarMoon
         mResourceSystem->removeResourceManager(mShapeManager.get());
 
         if (mWaterCollisionObject)
@@ -626,42 +632,6 @@ namespace MWPhysics
             found->second->setVelocity(velocity);
     }
 
-    void PhysicsSystem::applyJumpCost(const MWWorld::Ptr& ptr)
-    {
-        const bool isPlayer = (ptr == MWMechanics::getPlayer());
-        // Advance acrobatics and set flag for GetPCJumping
-        if (isPlayer)
-        {
-            ptr.getClass().skillUsageSucceeded(ptr, ESM::Skill::Acrobatics, ESM::Skill::Acrobatics_Jump);
-            MWBase::Environment::get().getWorld()->getPlayer().setJumping(true);
-        }
-
-        // Decrease fatigue
-        if (!isPlayer || !MWBase::Environment::get().getWorld()->getGodModeState())
-        {
-            const MWWorld::Store<ESM::GameSetting>& gmst
-                = MWBase::Environment::get().getESMStore()->get<ESM::GameSetting>();
-            const float fFatigueJumpBase = gmst.find("fFatigueJumpBase")->mValue.getFloat();
-            const float fFatigueJumpMult = gmst.find("fFatigueJumpMult")->mValue.getFloat();
-            const float normalizedEncumbrance = std::min(1.f, ptr.getClass().getNormalizedEncumbrance(ptr));
-            const float fatigueDecrease = fFatigueJumpBase + normalizedEncumbrance * fFatigueJumpMult;
-            MWMechanics::DynamicStat<float> fatigue = ptr.getClass().getCreatureStats(ptr).getFatigue();
-            fatigue.setCurrent(fatigue.getCurrent() - fatigueDecrease);
-            ptr.getClass().getCreatureStats(ptr).setFatigue(fatigue);
-        }
-    }
-
-    void PhysicsSystem::addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, bool asJump)
-    {
-        ActorMap::iterator found = mActors.find(ptr.mRef);
-        if (found == mActors.end())
-            return;
-        // NerevarMoon: an upward impulse from the ground is a jump for the game rules too (fatigue, acrobatics)
-        if (asJump && impulse.z() > 0.f && found->second->getOnGround())
-            applyJumpCost(ptr);
-        found->second->addImpulse(impulse);
-    }
-
     void PhysicsSystem::clearQueuedMovement()
     {
         for (const auto& [_, actor] : mActors)
@@ -910,8 +880,6 @@ namespace MWPhysics
     ActorFrameData::ActorFrameData(
         Actor& actor, bool inert, bool waterCollision, float slowFall, float waterlevel, bool isPlayer)
         : mPosition()
-        , mImpulse()
-        , mSlide()
         , mStandingOn(nullptr)
         , mIsOnGround(actor.getOnGround())
         , mIsOnSlope(actor.getOnSlope())

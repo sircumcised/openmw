@@ -956,7 +956,7 @@ namespace MWClass
         if (stats.isWerewolf() && running && stats.getDrawState() == MWMechanics::DrawState::Nothing)
             moveSpeed *= gmst.fWereWolfRunMult->mValue.getFloat();
 
-        return moveSpeed * stats.getSpeedMultiplier(); // NerevarMoon
+        return moveSpeed;
     }
 
     float Npc::getJump(const MWWorld::Ptr& ptr) const

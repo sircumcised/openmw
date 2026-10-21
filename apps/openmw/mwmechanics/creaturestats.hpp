@@ -89,8 +89,6 @@ namespace MWMechanics
 
     protected:
         std::string mAttackType;
-        float mSpeedMultiplier = 1.f; // NerevarMoon: Lua movement speed multiplier (not saved)
-        bool mEngineBlock = true; // NerevarMoon: false = the engine's shield block roll is skipped (not saved)
         int mLevel = 0;
         bool mAttackingOrSpell = false;
 
@@ -157,12 +155,6 @@ namespace MWMechanics
         void setAttackingOrSpell(bool attackingOrSpell) { mAttackingOrSpell = attackingOrSpell; }
 
         void setAttackType(std::string_view attackType) { mAttackType = attackType; }
-
-        // NerevarMoon
-        float getSpeedMultiplier() const { return mSpeedMultiplier; }
-        void setSpeedMultiplier(float value) { mSpeedMultiplier = value; }
-        bool getEngineBlock() const { return mEngineBlock; }
-        void setEngineBlock(bool value) { mEngineBlock = value; }
 
         void setLevel(int level);
 
