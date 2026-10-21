@@ -42,19 +42,6 @@ namespace Settings
         SettingValue<bool> mTerrainShadows{ mIndex, "Shadows", "terrain shadows" };
         SettingValue<bool> mObjectShadows{ mIndex, "Shadows", "object shadows" };
         SettingValue<bool> mEnableIndoorShadows{ mIndex, "Shadows", "enable indoor shadows" };
-        // NerevarMoon: point light shadows
-        SettingValue<bool> mPointLightShadows{ mIndex, "Shadows", "point light shadows" };
-        SettingValue<int> mPointShadowLights{ mIndex, "Shadows", "point shadow lights", makeClampSanitizerInt(1, 4) };
-        SettingValue<int> mPointShadowResolution{ mIndex, "Shadows", "point shadow resolution",
-            makeClampSanitizerInt(128, 2048) };
-        SettingValue<float> mPointShadowBias{ mIndex, "Shadows", "point shadow bias",
-            makeClampSanitizerFloat(0, 0.1f) };
-        SettingValue<float> mPointShadowNormalOffset{ mIndex, "Shadows", "point shadow normal offset",
-            makeClampSanitizerFloat(0, 10) };
-        SettingValue<float> mPointShadowNear{ mIndex, "Shadows", "point shadow near", makeClampSanitizerFloat(1, 256) };
-        SettingValue<float> mPointShadowStrength{ mIndex, "Shadows", "point shadow strength",
-            makeClampSanitizerFloat(0, 1) };
-        SettingValue<bool> mPointShadowDebug{ mIndex, "Shadows", "point shadow debug" };
     };
 }
 

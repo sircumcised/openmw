@@ -89,7 +89,6 @@ file(GLOB UNITTEST_SRC_FILES
     vfs/testpathutil.cpp
 
     sceneutil/osgacontroller.cpp
-    sceneutil/testpointshadowmath.cpp
 
     bsa/testbsafile.cpp
     bsa/testcompressedbsafile.cpp

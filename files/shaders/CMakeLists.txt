@@ -25,7 +25,6 @@ set(SHADER_FILES
     lib/core/vertex_multiview.glsl
     lib/light/lighting.glsl
     lib/light/lighting_util.glsl
-    lib/light/pointshadows.glsl
     lib/sky/passes.glsl
     lib/material/parallax.glsl
     lib/material/alpha.glsl

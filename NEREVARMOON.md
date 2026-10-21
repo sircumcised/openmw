@@ -41,29 +41,6 @@ OpenMW mod keeps working, a mod that uses these additions needs this build.
   find nodes of attached weapons and worn parts (`Animation::findNodeAnywhere`, cached). Limit left:
   colliders on skeleton bones visited later in the same frame lag one frame.
 
-## Point light shadows
-Indoors, the strongest point lights (torches, candles, braziers) cast real-time shadows from statics,
-objects, actors and the player. Off by default; `[Shadows]` settings:
-- `point light shadows = false`: on/off.
-- `point shadow lights = 4`: lights with a shadow at once (1 to 4), picked each frame by
-  radius x intensity / distance, a newcomer needs 20% more than the light it replaces.
-- `point shadow resolution = 512`: size of each cube face.
-- `point shadow bias = 0.01` (fraction of the distance), `point shadow normal offset = 1.0`: against shadow acne.
-- `point shadow near = 48` (units, ~67 cm): casters nearer than this to the light never cast. Morrowind
-  places lights inside their fixtures (a Dwemer lamp is threaded on its pipe, torches on poles, lamps in
-  brackets), which with a small near plane blocked most of the light (builds 12 and 13).
-- `point shadow strength = 0.75`: how dark the shadow gets; 1.0 blocks the light completely.
-- Edges: 12 Poisson taps over a 2-texel radius, soft at 512.
-- `point shadow debug = false`: tints each shadowed light red, green, blue, yellow.
-
-Limits: interiors only; moving lights (a torch carried by the player or an NPC) cast none; an item
-picked up or dropped updates its shadow only when the light changes slot or the cell changes.
-Casters nearer than `point shadow near` never cast (see above).
-Shaders: `lib/light/pointshadows.glsl`, hooked in the point light loop of `lib/light/lighting.glsl`
-(per-pixel lighting only). A replaced `lighting.glsl` (shader packs) needs the same hook: include
-`pointshadows.glsl`, multiply the light's diffuse and specular by `nmPointShadow(lightIndex, viewPos,
-viewNormal)`, leave its ambient alone.
-
 ## Engine changes (all marked `NerevarMoon` in the code)
 - `mwphysics/actor.hpp`: `addImpulse`/`takeImpulse` (main thread), slide velocity.
 - `mwphysics/physicssystem.hpp`: `ActorFrameData::mImpulse`, `mSlide`; `PhysicsSystem::addActorImpulse`.
@@ -84,6 +61,3 @@ viewNormal)`, leave its ambient alone.
 - `mtphysics.cpp` (build 3): the impulse stays pending on frames without a physics step.
 - `components/sceneutil/bonephysics.*` (build 5): spec parser, `attachBonePhysics`, `BonePhysicsController`;
   hooked in `Resource::SceneManager::getTemplate` right after the model is loaded, before the optimizer.
-- `components/sceneutil/pointshadow.*`, `pointshadowmath.*`, `shadow.*`, `lightmanager.hpp` (`getLights`),
-  `shader/shadermanager.*` (`Slot::PointShadowMaps`), `settings/categories/shadows.hpp`,
-  `mwrender/renderingmanager.cpp`: point light shadows (cameras, slot choice, uniforms, settings).

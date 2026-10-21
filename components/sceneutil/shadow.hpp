@@ -1,8 +1,6 @@
 #ifndef COMPONENTS_SCENEUTIL_SHADOW_H
 #define COMPONENTS_SCENEUTIL_SHADOW_H
 
-#include <memory>
-
 #include <components/shader/shadermanager.hpp>
 
 namespace osg
@@ -25,8 +23,6 @@ namespace Settings
 namespace SceneUtil
 {
     class MWShadowTechnique;
-    class LightManager;
-    class PointShadowManager;
     class ShadowManager
     {
     public:
@@ -36,9 +32,7 @@ namespace SceneUtil
 
         explicit ShadowManager(osg::ref_ptr<osg::Group> sceneRoot, osg::ref_ptr<osg::Group> rootNode,
             unsigned int outdoorShadowCastingMask, unsigned int indoorShadowCastingMask, unsigned int worldMask,
-            const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager,
-            LightManager* lightManager = nullptr, unsigned int pointShadowStaticMask = 0, // NerevarMoon
-            unsigned int pointShadowDynamicMask = 0); ///< point shadow masks include the scene root's mask
+            const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager);
         ~ShadowManager();
 
         void setupShadowSettings(const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager);
@@ -62,8 +56,6 @@ namespace SceneUtil
 
         unsigned int mOutdoorShadowCastingMask;
         unsigned int mIndoorShadowCastingMask;
-
-        std::unique_ptr<PointShadowManager> mPointShadowManager; // NerevarMoon
     };
 }
 
