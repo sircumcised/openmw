@@ -300,6 +300,7 @@ namespace SceneUtil
 
     void BonePhysicsController::updateColliders()
     {
+        mColliderPrev.swap(mColliderWorld);
         mColliderWorld.clear();
         for (const ColliderInstance& collider : mColliders)
         {
@@ -312,30 +313,15 @@ namespace SceneUtil
             const osg::Matrixf world = osg::computeLocalToWorld(paths[0]);
             mColliderWorld.push_back({ collider.mOffset * world, collider.mEnd * world, collider.mRadius });
         }
+        // first frame, or a collider node came or went: nothing to move from
+        if (mColliderPrev.size() != mColliderWorld.size())
+            mColliderPrev = mColliderWorld;
     }
 
-    void BonePhysicsController::collide(osg::Vec3f& pos, float radius) const
+    void BonePhysicsController::collide(osg::Vec3f& pos, const osg::Vec3f& from, float radius) const
     {
-        for (const ColliderWorld& collider : mColliderWorld)
-        {
-            // closest point on the segment a-b
-            const osg::Vec3f ab = collider.mB - collider.mA;
-            float t = 0.f;
-            const float ab2 = ab.length2();
-            if (ab2 > 1e-6f)
-                t = std::clamp(((pos - collider.mA) * ab) / ab2, 0.f, 1.f);
-            const osg::Vec3f closest = collider.mA + ab * t;
-            osg::Vec3f away = pos - closest;
-            const float minDist = collider.mRadius + radius;
-            if (away.length2() >= minDist * minDist)
-                continue;
-            const float dist = away.length();
-            if (dist < 1e-4f)
-                away = osg::Vec3f(0.f, 0.f, 1.f);
-            else
-                away /= dist;
-            pos = closest + away * minDist;
-        }
+        for (std::size_t i = 0; i < mStepNow.size(); ++i)
+            BonePhysicsMath::collideCapsule(pos, from, mStepBefore[i], mStepNow[i], radius);
     }
 
     float BonePhysicsController::particleRadius(std::size_t index) const
@@ -378,6 +364,9 @@ namespace SceneUtil
     {
         // the kinematic joint advances a fraction of the frame per step: a step must never see the whole frame's
         // hand motion at once, or the chain takes (steps x) the real speed
+        mStepStart.resize(mParticles.size());
+        for (std::size_t i = 0; i < mParticles.size(); ++i)
+            mStepStart[i] = mParticles[i].mPos;
         mParticles[0].mPrev = mParticles[0].mPos;
         mParticles[0].mPos = rootPos;
         const std::size_t n = mNodes.size();
@@ -410,7 +399,7 @@ namespace SceneUtil
                 if (bendLen > maxBend && bendLen > 1e-5f)
                     next.mPos = rest + bend * (maxBend / bendLen);
             }
-            collide(next.mPos, particleRadius(i + 1));
+            collide(next.mPos, mStepStart[i + 1], particleRadius(i + 1));
 
             osg::Vec3f dir = next.mPos - joint;
             osg::Vec3f restDir = animRot * mRestOffsets[i];
@@ -445,7 +434,7 @@ namespace SceneUtil
             }
         }
         for (std::size_t i = 1; i <= n; ++i)
-            collide(mParticles[i].mPos, particleRadius(i));
+            collide(mParticles[i].mPos, mStepStart[i], particleRadius(i));
     }
 
     void BonePhysicsController::operator()(osg::MatrixTransform* node, osg::NodeVisitor* nv)
@@ -524,9 +513,19 @@ namespace SceneUtil
         for (std::size_t i = 0; i < mParticles.size(); ++i)
             mFrameStart[i] = mParticles[i].mPos;
 
+        mStepBefore.resize(mColliderWorld.size());
+        mStepNow.resize(mColliderWorld.size());
         for (int step = 0; step < steps; ++step)
         {
+            const float t0 = static_cast<float>(step) / static_cast<float>(steps);
             const float t = static_cast<float>(step + 1) / static_cast<float>(steps);
+            // the colliders move through the frame with the root: a haft swinging through the chain is seen
+            // step by step, and each link remembers which side of it it was on (BonePhysicsMath::collideCapsule)
+            for (std::size_t c = 0; c < mColliderWorld.size(); ++c)
+            {
+                mStepBefore[c] = BonePhysicsMath::lerp(mColliderPrev[c], mColliderWorld[c], t0);
+                mStepNow[c] = BonePhysicsMath::lerp(mColliderPrev[c], mColliderWorld[c], t);
+            }
             integrate(rootFrom + (rootTo - rootFrom) * t, mountRot, gravityStep, dragStep);
         }
 

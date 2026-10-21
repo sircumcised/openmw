@@ -16,6 +16,7 @@
 #include <osg/Vec3f>
 #include <osg/observer_ptr>
 
+#include "bonephysicsmath.hpp"
 #include "nodecallback.hpp"
 
 namespace VFS
@@ -100,7 +101,7 @@ namespace SceneUtil
         bool resolve(osg::MatrixTransform* node);
         void resetState(const osg::Matrixf& mountWorld);
         void updateColliders();
-        void collide(osg::Vec3f& pos, float radius) const;
+        void collide(osg::Vec3f& pos, const osg::Vec3f& from, float radius) const;
         float particleRadius(std::size_t index) const;
         void collideWorld(osg::Vec3f& pos, const osg::Vec3f& prev, float radius) const;
         void integrate(const osg::Vec3f& rootPos, const osg::Quat& mountRot, const osg::Vec3f& gravityStep,
@@ -120,13 +121,11 @@ namespace SceneUtil
         std::vector<float> mRestLengths;
         std::vector<Particle> mParticles; // size = bones + 1
         std::vector<ColliderInstance> mColliders;
-        struct ColliderWorld
-        {
-            osg::Vec3f mA;
-            osg::Vec3f mB;
-            float mRadius;
-        };
-        std::vector<ColliderWorld> mColliderWorld; // this frame's capsules
+        std::vector<BonePhysicsMath::Capsule> mColliderWorld; // this frame's capsules
+        std::vector<BonePhysicsMath::Capsule> mColliderPrev; // last frame's capsules
+        std::vector<BonePhysicsMath::Capsule> mStepBefore; // capsules at the start of the current step
+        std::vector<BonePhysicsMath::Capsule> mStepNow; // capsules at the end of the current step
+        std::vector<osg::Vec3f> mStepStart; // particle positions at the start of the current step
         std::vector<osg::Vec3f> mFrameStart; // particle positions at the start of the frame (world rays)
         double mLastTime = -1.0;
         float mAccum = 0.f; // time waiting for the next fixed step
