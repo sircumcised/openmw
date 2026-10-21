@@ -83,8 +83,6 @@ namespace MWPhysics
         ActorFrameData(Actor& actor, bool inert, bool waterCollision, float slowFall, float waterlevel, bool isPlayer);
         osg::Vec3f mPosition;
         osg::Vec3f mInertia;
-        osg::Vec3f mImpulse; // NerevarMoon: one-shot velocity change for this step
-        osg::Vec3f mSlide; // NerevarMoon: horizontal push damped by ground friction
         const btCollisionObject* mStandingOn;
         bool mIsOnGround;
         bool mIsOnSlope;
@@ -249,10 +247,6 @@ namespace MWPhysics
         /// Queues velocity movement for a Ptr. If a Ptr is already queued, its velocity will
         /// be overwritten. Valid until the next call to stepSimulation
         void queueObjectMovement(const MWWorld::Ptr& ptr, const osg::Vec3f& velocity);
-
-        /// NerevarMoon: one-shot velocity change applied at the next physics step (see Actor::addImpulse).
-        void addActorImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, bool asJump);
-        static void applyJumpCost(const MWWorld::Ptr& ptr); // fatigue and acrobatics of a jump
 
         /// Clear the queued movements list without applying.
         void clearQueuedMovement();

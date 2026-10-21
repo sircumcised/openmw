@@ -1362,11 +1362,6 @@ namespace MWWorld
             MWBase::Environment::get().getSoundManager()->setListenerVel(velocity);
     }
 
-    void World::addActorImpulse(const Ptr& ptr, const osg::Vec3f& impulse, bool asJump)
-    {
-        mPhysics->addActorImpulse(ptr, impulse, asJump);
-    }
-
     void World::updateAnimatedCollisionShape(const Ptr& ptr)
     {
         mPhysics->updateAnimatedCollisionShape(ptr);

@@ -18,7 +18,6 @@
 #include <components/vfs/pathutil.hpp>
 
 #include <map>
-#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -232,17 +231,6 @@ namespace MWRender
         float mBodyPitchRadians;
 
         osg::ref_ptr<RotateController> addRotateController(std::string_view bone);
-
-        // NerevarMoon: Lua bone overrides, recreated by addControllers() after every resetActiveGroups().
-        struct BoneOverride
-        {
-            osg::Quat mRotate;
-            osg::Vec3f mOffset;
-            osg::ref_ptr<RotateController> mController;
-        };
-        std::map<std::string, BoneOverride, std::less<>> mBoneOverrides;
-        mutable std::map<std::string, osg::observer_ptr<const osg::Node>, std::less<>> mExtraNodes;
-        void attachBoneOverride(const std::string& bone, BoneOverride& override);
 
         bool mHasMagicEffects;
 
@@ -460,22 +448,6 @@ namespace MWRender
         /// Return a node with the specified name, or nullptr if not existing.
         /// @note The matching is case-insensitive.
         const osg::Node* getNode(std::string_view name) const;
-
-        /// NerevarMoon: a node by name: the skeleton map first, then the whole object root (attached weapons,
-        /// worn parts). Cached per name; the cache is re-checked when the node is gone.
-        const osg::Node* findNodeAnywhere(std::string_view name) const;
-        /// NerevarMoon: is the node driven by the bone physics solver.
-        bool hasBonePhysics(std::string_view bone) const;
-
-        /// NerevarMoon: world transform of a bone as left by the last update traversal.
-        /// Reads only node matrices, so it is safe from the Lua thread while the frame is being drawn.
-        std::optional<osg::Matrixf> getBoneWorldTransform(std::string_view bone) const;
-
-        /// NerevarMoon: rotation/offset applied on top of the animation, in object root space (actor local).
-        /// std::nullopt clears that component; an override with no rotation and no offset is removed.
-        /// Returns false if the bone is missing or has no keyframe controller to reset it each frame.
-        bool setBoneOverride(std::string_view bone, std::optional<osg::Quat> rotate, std::optional<osg::Vec3f> offset);
-        void clearBoneOverrides();
 
         MWWorld::MovementDirectionFlags getSupportedMovementDirections(
             std::span<const std::string_view> prefixes) const;

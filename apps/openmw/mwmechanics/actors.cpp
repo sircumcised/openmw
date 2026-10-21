@@ -944,14 +944,6 @@ namespace MWMechanics
         return it->second->getCharacterController().isAttackPreparing();
     }
 
-    bool Actors::cancelAttack(const MWWorld::Ptr& ptr)
-    {
-        const auto it = mIndex.find(ptr.mRef);
-        if (it == mIndex.end())
-            return false;
-        return it->second->getCharacterController().cancelAttack();
-    }
-
     bool Actors::isRunning(const MWWorld::Ptr& ptr) const
     {
         const auto it = mIndex.find(ptr.mRef);

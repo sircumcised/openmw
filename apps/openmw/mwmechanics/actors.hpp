@@ -107,7 +107,6 @@ namespace MWMechanics
         ///< Return the number of deaths for actors with the given ID.
 
         bool isAttackPreparing(const MWWorld::Ptr& ptr) const;
-        bool cancelAttack(const MWWorld::Ptr& ptr); // NerevarMoon
         bool isRunning(const MWWorld::Ptr& ptr) const;
         bool isSneaking(const MWWorld::Ptr& ptr) const;
 

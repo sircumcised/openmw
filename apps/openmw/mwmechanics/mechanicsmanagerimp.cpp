@@ -367,11 +367,6 @@ namespace MWMechanics
         return mActors.isAttackPreparing(ptr);
     }
 
-    bool MechanicsManager::cancelAttack(const MWWorld::Ptr& ptr)
-    {
-        return mActors.cancelAttack(ptr);
-    }
-
     bool MechanicsManager::isRunning(const MWWorld::Ptr& ptr)
     {
         CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);

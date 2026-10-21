@@ -1,10 +1,6 @@
 #include "animationbindings.hpp"
 
-#include <cmath>
-
-#include <components/debug/debuglog.hpp>
 #include <components/lua/luastate.hpp>
-#include <components/lua/utilpackage.hpp>
 #include <components/misc/finitevalues.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -242,66 +238,6 @@ namespace MWLua
         api["hasBone"] = [](const LObject& object, std::string_view bonename) -> bool {
             const MWRender::Animation* anim = getConstAnimationOrThrow(object);
             return anim->getNode(bonename) != nullptr;
-        };
-
-        // NerevarMoon: bone access from Lua.
-        api["getBoneTransform"]
-            = [](const LObject& object, std::string_view bonename) -> sol::optional<LuaUtil::TransformM> {
-            const MWRender::Animation* anim = getConstAnimationOrThrow(object);
-            std::optional<osg::Matrixf> m = anim->getBoneWorldTransform(bonename);
-            if (!m)
-                return sol::nullopt;
-            return LuaUtil::asTransform(*m);
-        };
-
-        api["hasBonePhysics"] = [](const LObject& object, std::string_view bonename) -> bool {
-            return getConstAnimationOrThrow(object)->hasBonePhysics(bonename);
-        };
-
-        auto queueBoneOverride = [context](const SelfObject& object, std::string_view bonename,
-                                     std::optional<osg::Quat> rotate, std::optional<osg::Vec3f> offset) {
-            if (getConstAnimationOrThrow(object)->getNode(bonename) == nullptr)
-                throw std::runtime_error("No such bone: " + std::string(bonename));
-            context.mLuaManager->addAction(
-                [object = Object(object), bone = std::string(bonename), rotate, offset] {
-                    MWRender::Animation* anim = getMutableAnimationOrThrow(object);
-                    if (!anim->setBoneOverride(bone, rotate, offset))
-                        Log(Debug::Warning) << "Bone override ignored (bone not animated): " << bone;
-                },
-                "setBoneOverrideAction");
-        };
-
-        api["setBoneOverride"] = [queueBoneOverride](const SelfObject& object, std::string_view bonename,
-                                     sol::optional<sol::table> options) {
-            std::optional<osg::Quat> rotate;
-            std::optional<osg::Vec3f> offset;
-            if (options)
-            {
-                sol::object r = options->get<sol::object>("rotation");
-                if (r.is<LuaUtil::TransformQ>())
-                    rotate = r.as<LuaUtil::TransformQ>().mQ;
-                else if (r.is<LuaUtil::TransformM>())
-                    rotate = r.as<LuaUtil::TransformM>().mM.getRotate();
-                else if (r != sol::nil)
-                    throw std::runtime_error("rotation must be a util.transform");
-                sol::object o = options->get<sol::object>("offset");
-                if (o.is<osg::Vec3f>())
-                {
-                    const osg::Vec3f v = o.as<osg::Vec3f>();
-                    if (!std::isfinite(v.x()) || !std::isfinite(v.y()) || !std::isfinite(v.z()))
-                        throw std::runtime_error("offset must be finite");
-                    offset = v;
-                }
-                else if (o != sol::nil)
-                    throw std::runtime_error("offset must be a util.vector3");
-            }
-            queueBoneOverride(object, bonename, rotate, offset);
-        };
-
-        api["clearBoneOverrides"] = [context](const SelfObject& object) {
-            context.mLuaManager->addAction(
-                [object = Object(object)] { getMutableAnimationOrThrow(object)->clearBoneOverrides(); },
-                "clearBoneOverridesAction");
         };
 
         api["addVfx"] = [context](const SelfObject& object, std::string_view model, sol::optional<sol::table> options) {
