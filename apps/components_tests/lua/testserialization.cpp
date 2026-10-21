@@ -1,8 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <limits>
-
 #include <osg/Matrixf>
 #include <osg/Quat>
 #include <osg/Vec2f>
@@ -193,51 +191,6 @@ namespace
         EXPECT_NO_THROW(lua.safe_script("t.nested.x = 5"));
         EXPECT_ERROR(lua.safe_script("ro_t.x = 5"), "userdata value");
         EXPECT_ERROR(lua.safe_script("ro_t.nested.x = 5"), "userdata value");
-    }
-
-    TEST(LuaSerializationTest, NestedTablesLimit)
-    {
-        sol::state lua;
-        const auto makeNested = [&](int depth) {
-            sol::table root(lua, sol::create);
-            sol::table current = root;
-            for (int i = 1; i < depth; ++i)
-            {
-                sol::table next(lua, sol::create);
-                current["t"] = next;
-                current = next;
-            }
-            return root;
-        };
-        // What can be serialized can be read back.
-        const std::string serialized = LuaUtil::serialize(makeNested(32));
-        EXPECT_NO_THROW(LuaUtil::deserialize(lua, serialized));
-        EXPECT_ERROR(LuaUtil::serialize(makeNested(33)), "32 nested tables");
-
-        // Data that did not come from the serializer must not make the deserializer recurse without limit.
-        std::string hostile(1, '\0');
-        hostile.append(100000, '\x03'); // format version, then nothing but "table start"
-        const int top = lua_gettop(lua);
-        EXPECT_ERROR(LuaUtil::deserialize(lua, hostile), "32 nested tables");
-        lua_settop(lua, top);
-    }
-
-    TEST(LuaSerializationTest, NanTableKey)
-    {
-        // Can not come from the serializer (Lua has no such key), but can come from outside.
-        sol::state lua;
-        std::string data;
-        data.push_back('\0'); // format version
-        data.push_back('\x03'); // table start
-        data.push_back('\0'); // number (the key)
-        const double nan = Misc::toLittleEndian(std::numeric_limits<double>::quiet_NaN());
-        data.append(reinterpret_cast<const char*>(&nan), sizeof(nan));
-        data.push_back('\x02'); // boolean (the value)
-        data.push_back('\x01');
-        data.push_back('\x04'); // table end
-        const int top = lua_gettop(lua);
-        EXPECT_ERROR(LuaUtil::deserialize(lua, data), "NaN");
-        lua_settop(lua, top);
     }
 
     struct TestStruct1

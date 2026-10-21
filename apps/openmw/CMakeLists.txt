@@ -67,11 +67,7 @@ add_openmw_dir (mwlua
     types/types types/door types/item types/actor types/container types/lockable types/weapon types/npc
     types/creature types/player types/activator types/book types/lockpick types/probe types/apparatus
     types/potion types/ingredient types/misc types/repair types/armor types/light types/static
-    types/clothing types/levelledlist types/terminal magictypebindings netbindings
-    )
-
-add_openmw_dir (mwnet
-    session
+    types/clothing types/levelledlist types/terminal magictypebindings
     )
 
 add_openmw_dir (mwsound
@@ -192,7 +188,6 @@ target_link_libraries(openmw-lib
     ${RecastNavigation_LIBRARIES}
     osg-ffmpeg-videoplayer
     oics
-    enet
     components
 )
 

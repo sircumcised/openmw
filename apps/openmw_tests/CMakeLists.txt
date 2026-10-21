@@ -18,8 +18,6 @@ file(GLOB UNITTEST_SRC_FILES
     mwgui/weightedsearch.cpp
 
     mwscript/testscripts.cpp
-
-    mwnet/testsession.cpp
 )
 
 if (MSVC)
