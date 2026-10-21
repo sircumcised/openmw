@@ -1702,7 +1702,7 @@ namespace MWRender
     }
 
     void Animation::addEffect(std::string_view model, std::string_view effectId, bool loop, std::string_view bonename,
-        std::string_view texture, bool useAmbientLight)
+        std::string_view texture, bool useAmbientLight, const osg::Matrixf* modelOffset)
     {
         if (!mObjectRoot.get())
             return;
@@ -1752,8 +1752,16 @@ namespace MWRender
         }
         parentNode->addChild(trans);
 
+        // NerevarMoon: the offset gets its own node under trans, so the creature scale and height above still apply
+        osg::ref_ptr<osg::Group> modelParent = trans;
+        if (modelOffset)
+        {
+            modelParent = new osg::MatrixTransform(*modelOffset);
+            trans->addChild(modelParent);
+        }
+
         osg::ref_ptr<osg::Node> node
-            = mResourceSystem->getSceneManager()->getInstance(VFS::Path::toNormalized(model), trans);
+            = mResourceSystem->getSceneManager()->getInstance(VFS::Path::toNormalized(model), modelParent);
 
         if (useAmbientLight)
         {

@@ -1,6 +1,9 @@
 #include "animationbindings.hpp"
 
+#include <optional>
+
 #include <components/lua/luastate.hpp>
+#include <components/lua/utilpackage.hpp>
 #include <components/misc/finitevalues.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -240,18 +243,27 @@ namespace MWLua
             return anim->getNode(bonename) != nullptr;
         };
 
+        // NerevarMoon: addVfx accepts options.offset (util.transform), marked by animation.vfxOffset
+        api["vfxOffset"] = true;
         api["addVfx"] = [context](const SelfObject& object, std::string_view model, sol::optional<sol::table> options) {
             if (options)
             {
+                std::optional<osg::Matrixf> offset;
+                sol::object offsetObj = (*options)["offset"];
+                if (offsetObj.is<LuaUtil::TransformQ>())
+                    offset = osg::Matrixf::rotate(offsetObj.as<LuaUtil::TransformQ>().mQ);
+                else if (offsetObj.get_type() != sol::type::lua_nil)
+                    offset = LuaUtil::cast<LuaUtil::TransformM>(offsetObj).mM;
                 context.mLuaManager->addAction(
                     [object = Object(object), model = std::string(model),
                         effectId = options->get_or<std::string>("vfxId", ""), loop = options->get_or("loop", false),
                         boneName = options->get_or<std::string>("boneName", ""),
                         particleTexture = options->get_or<std::string>("particleTextureOverride", ""),
-                        useAmbientLight = options->get_or("useAmbientLight", true)] {
+                        useAmbientLight = options->get_or("useAmbientLight", true), offset] {
                         MWRender::Animation* anim = getMutableAnimationOrThrow(object);
 
-                        anim->addEffect(model, effectId, loop, boneName, particleTexture, useAmbientLight);
+                        anim->addEffect(model, effectId, loop, boneName, particleTexture, useAmbientLight,
+                            offset ? &*offset : nullptr);
                     },
                     "addVfxAction");
             }

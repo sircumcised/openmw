@@ -218,6 +218,10 @@
 -- @return #string 
 
 ---
+-- NerevarMoon engine only: true when @{#animation.addVfx} accepts the `offset` option (nil in stock OpenMW).
+-- @field [parent=#animation] #boolean vfxOffset
+
+---
 -- Plays a VFX on the actor.
 -- Can only be used on self. Can also be evoked by sending an AddVfx event to the target actor.
 -- @function [parent=#animation] addVfx
@@ -230,6 +234,7 @@
 --   * `particleTextureOverride` - name of the particle texture to use. (default: "")
 --   * `vfxId` - a string ID that can be used to remove the effect later, using #removeVfx, and to avoid duplicate effects. The default value of "" can have duplicates. To avoid interaction with the engine, use unique identifiers unrelated to magic effect IDs. The engine uses this identifier to add and remove magic effects based on what effects are active on the actor. If this is set equal to the @{openmw.core#MagicEffectId} identifier of the magic effect being added, for example core.magic.EFFECT_TYPE.FireDamage, then the engine will remove it once the fire damage effect on the actor reaches 0. (Default: "").
 --   * `useAmbientLight` - boolean, vfx get a white ambient light attached in Morrowind. If false don't attach this. (default: true)
+--   * `offset` - @{openmw.util#Transform}, NerevarMoon engine only: where the model sits in the bone's space (or the actor's, without `boneName`), e.g. a weapon held in the left hand. (default: none)
 --
 -- @usage local mgef = core.magic.effects.records[myEffectName]
 -- anim.addVfx(self, 'VFX_Hands', {boneName = 'Bip01 L Hand', particleTextureOverride = mgef.particle, loop = mgef.continuousVfx, vfxId = mgef.id..'_myuniquenamehere'})

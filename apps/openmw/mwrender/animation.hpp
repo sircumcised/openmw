@@ -24,6 +24,11 @@
 #include <unordered_set>
 #include <vector>
 
+namespace osg
+{
+    class Matrixf;
+}
+
 namespace ESM
 {
     struct Light;
@@ -349,10 +354,12 @@ namespace MWRender
          * @param texture override the texture specified in the model's materials - if empty, do not override
          * @param useAmbientLight attach white ambient light to the root VFX node of the scenegraph (Morrowind
          * default)
+         * @param modelOffset NerevarMoon: transform of the model in the bone's (or scene node's) space, or null
          * @note Will not add an effect twice.
          */
         void addEffect(std::string_view model, std::string_view effectId, bool loop = false,
-            std::string_view bonename = {}, std::string_view texture = {}, bool useAmbientLight = true);
+            std::string_view bonename = {}, std::string_view texture = {}, bool useAmbientLight = true,
+            const osg::Matrixf* modelOffset = nullptr);
 
         void removeEffect(std::string_view effectId);
         void removeEffects();
