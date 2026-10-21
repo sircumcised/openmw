@@ -26,6 +26,7 @@
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/conversion.hpp>
 #include <components/resource/bulletshapemanager.hpp>
+#include <components/sceneutil/bonephysics.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/settings/values.hpp>
 
@@ -132,10 +133,23 @@ namespace MWPhysics
 
         mDebugDrawer = std::make_unique<MWRender::DebugDrawer>(mParentNode, mCollisionWorld.get(), mDebugDrawEnabled);
         mTaskScheduler = std::make_unique<PhysicsTaskScheduler>(mPhysicsDt, mCollisionWorld.get(), mDebugDrawer.get());
+
+        // NerevarMoon: bone chains (bonephysics) ask the world for floors and walls through this ray
+        SceneUtil::BonePhysicsController::setWorldRay(
+            [this](const osg::Vec3f& from, const osg::Vec3f& to, osg::Vec3f& hitPos, osg::Vec3f& hitNormal) {
+                const RayCastingResult result = castRay(
+                    from, to, {}, {}, CollisionType_World | CollisionType_HeightMap | CollisionType_Door);
+                if (!result.mHit)
+                    return false;
+                hitPos = result.mHitPos;
+                hitNormal = result.mHitNormal;
+                return true;
+            });
     }
 
     PhysicsSystem::~PhysicsSystem()
     {
+        SceneUtil::BonePhysicsController::setWorldRay(nullptr); // NerevarMoon
         mResourceSystem->removeResourceManager(mShapeManager.get());
 
         if (mWaterCollisionObject)

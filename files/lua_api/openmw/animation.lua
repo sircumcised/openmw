@@ -218,6 +218,14 @@
 -- @return #string 
 
 ---
+-- NerevarMoon: is this node driven by the engine's bone physics solver (a `<model>.physics.yaml` chain).
+-- Nodes of attached weapons and worn parts are found too.
+-- @function [parent=#animation] hasBonePhysics
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @return #boolean
+
+---
 -- NerevarMoon engine only: true when @{#animation.addVfx} accepts the `offset` option (nil in stock OpenMW).
 -- @field [parent=#animation] #boolean vfxOffset
 

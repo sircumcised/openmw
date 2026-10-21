@@ -15,6 +15,8 @@
 #include <components/sceneutil/nodecallback.hpp>
 #include <components/sceneutil/textkeymap.hpp>
 #include <components/sceneutil/util.hpp>
+
+#include <osg/observer_ptr>
 #include <components/vfs/pathutil.hpp>
 
 #include <map>
@@ -237,6 +239,8 @@ namespace MWRender
 
         osg::ref_ptr<RotateController> addRotateController(std::string_view bone);
 
+        mutable std::map<std::string, osg::observer_ptr<const osg::Node>, std::less<>> mExtraNodes; // NerevarMoon
+
         bool mHasMagicEffects;
 
         osg::ref_ptr<SceneUtil::LightSource> mGlowLight;
@@ -455,6 +459,12 @@ namespace MWRender
         /// Return a node with the specified name, or nullptr if not existing.
         /// @note The matching is case-insensitive.
         const osg::Node* getNode(std::string_view name) const;
+
+        /// NerevarMoon: a node by name: the skeleton map first, then the whole object root (attached weapons,
+        /// worn parts). Cached per name; the cache is re-checked when the node is gone.
+        const osg::Node* findNodeAnywhere(std::string_view name) const;
+        /// NerevarMoon: is the node driven by the bone physics solver.
+        bool hasBonePhysics(std::string_view bone) const;
 
         MWWorld::MovementDirectionFlags getSupportedMovementDirections(
             std::span<const std::string_view> prefixes) const;

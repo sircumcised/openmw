@@ -243,6 +243,11 @@ namespace MWLua
             return anim->getNode(bonename) != nullptr;
         };
 
+        // NerevarMoon: is the node (skeleton, attached weapon or worn part) driven by the bone physics solver
+        api["hasBonePhysics"] = [](const LObject& object, std::string_view bonename) -> bool {
+            return getConstAnimationOrThrow(object)->hasBonePhysics(bonename);
+        };
+
         // NerevarMoon: addVfx accepts options.offset (util.transform), marked by animation.vfxOffset
         api["vfxOffset"] = true;
         api["addVfx"] = [context](const SelfObject& object, std::string_view model, sol::optional<sol::table> options) {

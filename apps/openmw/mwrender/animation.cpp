@@ -44,6 +44,7 @@
 #include <components/sceneutil/positionattitudetransform.hpp>
 #include <components/sceneutil/skeleton.hpp>
 #include <components/sceneutil/statesetupdater.hpp>
+#include <components/sceneutil/bonephysics.hpp>
 #include <components/sceneutil/util.hpp>
 #include <components/sceneutil/visitor.hpp>
 
@@ -1863,6 +1864,44 @@ namespace MWRender
             return nullptr;
         else
             return found->second;
+    }
+
+    const osg::Node* Animation::findNodeAnywhere(std::string_view name) const
+    {
+        if (const osg::Node* node = getNode(name))
+            return node;
+        if (!mObjectRoot)
+            return nullptr;
+        const std::string key = Misc::StringUtils::lowerCase(name);
+        auto it = mExtraNodes.find(key);
+        if (it != mExtraNodes.end())
+        {
+            osg::ref_ptr<const osg::Node> locked;
+            if (it->second.lock(locked) && locked->getNumParents() > 0)
+                return locked.get();
+            mExtraNodes.erase(it);
+        }
+        SceneUtil::FindByNameVisitor visitor(name);
+        mObjectRoot->accept(visitor);
+        if (visitor.mFoundNode == nullptr)
+            return nullptr;
+        mExtraNodes[key] = visitor.mFoundNode;
+        return visitor.mFoundNode;
+    }
+
+    bool Animation::hasBonePhysics(std::string_view bone) const
+    {
+        const osg::Node* node = findNodeAnywhere(bone);
+        if (node == nullptr)
+            return false;
+        const osg::Callback* cb = node->getUpdateCallback();
+        while (cb)
+        {
+            if (dynamic_cast<const SceneUtil::BonePhysicsController*>(cb))
+                return true;
+            cb = cb->getNestedCallback();
+        }
+        return false;
     }
 
     void Animation::setAlpha(float alpha)
