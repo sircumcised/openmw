@@ -6,6 +6,7 @@
 #include <osg/ClipControl>
 #include <osg/ComputeBoundsVisitor>
 #include <osg/Group>
+#include <osg/TexEnvFilter>
 #include <osg/Light>
 #include <osg/Material>
 #include <osg/Matrix>
@@ -269,6 +270,16 @@ namespace MWRender
         rootNode->addCullCallback(mPerViewUniformStateUpdater);
 
         mPostProcessor = new PostProcessor(*this, viewer, mRootNode, resourceSystem->getVFS());
+
+        // NerevarMoon upscaler: sharper mip levels make up for the lower scene resolution
+        if (mPostProcessor->upscalerActive())
+        {
+            const float bias = SceneUtil::parseMipBias(Settings::postProcessing().mUpscaleMipBias.get())
+                                   .value_or(SceneUtil::upscaleMipBias(Settings::postProcessing().mUpscaleScale));
+            osg::ref_ptr<osg::TexEnvFilter> filter = new osg::TexEnvFilter(bias);
+            for (unsigned int unit = 0; unit < 8; ++unit)
+                mRootNode->getOrCreateStateSet()->setTextureAttribute(unit, filter);
+        }
         resourceSystem->getSceneManager()->setOpaqueDepthTex(
             mPostProcessor->getTexture(PostProcessor::Tex_OpaqueDepth, 0),
             mPostProcessor->getTexture(PostProcessor::Tex_OpaqueDepth, 1));
