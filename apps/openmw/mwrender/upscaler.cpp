@@ -34,10 +34,15 @@ void main()
 }
 )GLSL";
 
-        // 1 where arms and weapon were drawn in first person: their motion is not the camera's
-        constexpr const char* sReactiveSource = R"GLSL(#version 460
+        // 1 where arms and weapon were drawn in first person: their motion is not the camera's.
+        // texelFetch reads sample 0 of a multisample texture and mip 0 of a plain one.
+        constexpr const char* sReactiveSource = R"GLSL(
 layout(local_size_x = 8, local_size_y = 8) in;
+#ifdef MULTISAMPLE
+layout(binding = 0) uniform sampler2DMS firstPersonDepthTex;
+#else
 layout(binding = 0) uniform sampler2D firstPersonDepthTex;
+#endif
 layout(r8, binding = 0) uniform writeonly image2D reactiveImg;
 uniform ivec2 size;
 uniform bool reverseZ;
@@ -116,7 +121,8 @@ void main()
         return {};
     }
 
-    std::string Fsr2Upscaler::create(osg::State& state, osg::Vec2i sceneSize, osg::Vec2i outputSize, bool reverseZ)
+    std::string Fsr2Upscaler::create(osg::State& state, osg::Vec2i sceneSize, osg::Vec2i outputSize, bool reverseZ,
+        bool multisampledFirstPerson)
     {
         destroy(state);
 
@@ -125,7 +131,10 @@ void main()
         mVelocityProgram = compileCompute(ext, sVelocitySource, error);
         if (!mVelocityProgram)
             return error;
-        mReactiveProgram = compileCompute(ext, sReactiveSource, error);
+        mMultisampledFirstPerson = multisampledFirstPerson;
+        const std::string reactiveSource = std::string("#version 460\n")
+            + (multisampledFirstPerson ? "#define MULTISAMPLE\n" : "") + sReactiveSource;
+        mReactiveProgram = compileCompute(ext, reactiveSource.c_str(), error);
         if (!mReactiveProgram)
             return error;
 
@@ -170,7 +179,8 @@ void main()
         dispatchCompute(ext, in.mSceneSize);
 
         ext->glUseProgram(mReactiveProgram);
-        glBindTexture(GL_TEXTURE_2D, in.mFirstPersonDepth);
+        const GLenum firstPersonTarget = mMultisampledFirstPerson ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+        glBindTexture(firstPersonTarget, in.mFirstPersonDepth);
         ext->glBindImageTexture(0, mReactive, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R8);
         ext->glUniform2i(ext->glGetUniformLocation(mReactiveProgram, "size"), in.mSceneSize.x(), in.mSceneSize.y());
         ext->glUniform1i(ext->glGetUniformLocation(mReactiveProgram, "reverseZ"), in.mReverseZ);
@@ -178,6 +188,7 @@ void main()
         dispatchCompute(ext, in.mSceneSize);
 
         ext->glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        glBindTexture(firstPersonTarget, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
 
         Fsr2Bridge::Inputs bridge;

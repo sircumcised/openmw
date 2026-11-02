@@ -45,8 +45,9 @@ namespace MWRender
         // empty when GL 4.6, GL_ARB_gl_spirv and GL_KHR_shader_subgroup are there
         static std::string checkSupport(unsigned contextId);
 
-        // empty on success
-        std::string create(osg::State& state, osg::Vec2i sceneSize, osg::Vec2i outputSize, bool reverseZ);
+        // empty on success; with MSAA the first person depth is a multisample texture
+        std::string create(osg::State& state, osg::Vec2i sceneSize, osg::Vec2i outputSize, bool reverseZ,
+            bool multisampledFirstPerson);
         void destroy(osg::State& state);
         // empty on success
         std::string dispatch(osg::State& state, const Inputs& inputs);
@@ -57,6 +58,7 @@ namespace MWRender
         GLuint mReactiveProgram = 0;
         GLuint mVelocity = 0;
         GLuint mReactive = 0;
+        bool mMultisampledFirstPerson = false;
     };
 }
 

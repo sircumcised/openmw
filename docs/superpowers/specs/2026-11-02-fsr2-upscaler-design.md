@@ -58,7 +58,7 @@ Flag FSR2: `FFX_FSR2_ENABLE_DEPTH_INVERTED` se reverse Z è attivo, `FFX_FSR2_EN
 | `upscale sharpness` | 0.0 .. 1.0 | 0.3 | Nitidezza RCAS interna a FSR2 |
 | `upscale mip bias` | `auto` o numero | `auto` | `auto` vale `log2(s) - 1`, applicato con `osg::TexEnvFilter` sullo stateset radice |
 
-Con `upscaler = fsr2`, MSAA viene forzato a 0 perché FSR2 vuole un ingresso senza multisample. SMAA va tolto dalla catena omwfx a mano.
+Con `upscaler = fsr2` MSAA resta quello di `[Video] antialiasing` (Lorenzo, 02/11: MSAA 16 sempre). FSR2 legge `Tex_Scene` e `Tex_Depth` dopo il resolve dell'MSAA; la profondità della prima persona diventa una texture multisample con posizioni dei campioni fisse, letta al campione 0. SMAA resta nella catena omwfx e lavora sull'immagine già ricostruita.
 
 ## Fase 4 in dettaglio
 

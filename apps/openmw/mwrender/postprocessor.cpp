@@ -134,10 +134,6 @@ namespace MWRender
         if (Settings::postProcessing().mUpscaler.get() == "fsr2")
             Log(Debug::Error) << "[upscaler] fsr2 unavailable: engine built without NM_FSR2";
 #endif
-        // FSR2 wants a scene without multisampling
-        if (upscalerActive())
-            mSamples = 0;
-
         std::shared_ptr<LuminanceCalculator> luminanceCalculator = std::make_shared<LuminanceCalculator>(shaderManager);
 
         for (auto& canvas : mCanvases)
@@ -532,7 +528,14 @@ namespace MWRender
 
         if (upscalerActive())
         {
-            // the upscaler reads it back to find the pixels of arms and weapon
+            // the upscaler reads it back to find the pixels of arms and weapon; with MSAA it shares the frame buffer
+            // with multisampled render buffers, which needs fixed sample locations
+            if (mSamples > 1)
+            {
+                osg::ref_ptr<osg::Texture2DMultisample> texture = new osg::Texture2DMultisample(mSamples, GL_TRUE);
+                texture->setTextureSize(width, height);
+                textures[Tex_FirstPersonDepth] = texture;
+            }
             setupDepth(textures[Tex_FirstPersonDepth]);
             fbos[FBO_FirstPerson]->setAttachment(osg::FrameBufferObject::BufferComponent::PACKED_DEPTH_STENCIL_BUFFER,
                 Stereo::createMultiviewCompatibleAttachment(textures[Tex_FirstPersonDepth]));
@@ -975,7 +978,7 @@ namespace MWRender
                 mUpscaler = std::make_unique<Fsr2Upscaler>();
             std::string error = Fsr2Upscaler::checkSupport(contextId);
             if (error.empty())
-                error = mUpscaler->create(state, { size[0], size[1] }, { size[2], size[3] }, reverseZ);
+                error = mUpscaler->create(state, { size[0], size[1] }, { size[2], size[3] }, reverseZ, mSamples > 1);
             if (!error.empty())
             {
                 failUpscaler(std::move(error));
