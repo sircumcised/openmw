@@ -17,8 +17,7 @@ namespace MWRender
 layout(local_size_x = 8, local_size_y = 8) in;
 layout(binding = 0) uniform sampler2D depthTex;
 layout(rg16f, binding = 0) uniform writeonly image2D velocityImg;
-uniform mat4 invViewProj;
-uniform mat4 prevViewProj;
+uniform mat4 clipToPrevClip;
 uniform ivec2 size;
 uniform bool reverseZ;
 void main()
@@ -29,9 +28,7 @@ void main()
     vec2 uv = (vec2(p) + 0.5) / vec2(size);
     float d = texelFetch(depthTex, p, 0).r;
     float z = reverseZ ? d : d * 2.0 - 1.0;
-    vec4 pos = invViewProj * vec4(uv * 2.0 - 1.0, z, 1.0);
-    pos /= pos.w;
-    vec4 prev = prevViewProj * pos;
+    vec4 prev = clipToPrevClip * vec4(uv * 2.0 - 1.0, z, 1.0);
     vec2 prevUv = prev.xy / prev.w * 0.5 + 0.5;
     imageStore(velocityImg, p, vec4(prevUv - uv, 0.0, 0.0));
 }
@@ -167,9 +164,7 @@ void main()
         glBindTexture(GL_TEXTURE_2D, in.mDepth);
         ext->glBindImageTexture(0, mVelocity, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RG16F);
         ext->glUniformMatrix4fv(
-            ext->glGetUniformLocation(mVelocityProgram, "invViewProj"), 1, GL_FALSE, in.mInvViewProj.ptr());
-        ext->glUniformMatrix4fv(
-            ext->glGetUniformLocation(mVelocityProgram, "prevViewProj"), 1, GL_FALSE, in.mPrevViewProj.ptr());
+            ext->glGetUniformLocation(mVelocityProgram, "clipToPrevClip"), 1, GL_FALSE, in.mClipToPrevClip.ptr());
         ext->glUniform2i(ext->glGetUniformLocation(mVelocityProgram, "size"), in.mSceneSize.x(), in.mSceneSize.y());
         ext->glUniform1i(ext->glGetUniformLocation(mVelocityProgram, "reverseZ"), in.mReverseZ);
         dispatchCompute(ext, in.mSceneSize);
@@ -203,12 +198,18 @@ void main()
         bridge.mFovYRadians = in.mFovY;
         bridge.mReset = in.mReset;
         const std::string error = mContext.dispatch(bridge);
+        ext->glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
 
         // FSR2 leaves its programs, samplers, images and textures bound and does not tell OSG
         ext->glUseProgram(0);
-        for (GLuint unit = 0; unit < 16; ++unit)
-        {
+        GLint textureUnits = 0;
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &textureUnits);
+        for (GLuint unit = 0; unit < static_cast<GLuint>(textureUnits); ++unit)
             ext->glBindSampler(unit, 0);
+        GLint imageUnits = 0;
+        glGetIntegerv(GL_MAX_IMAGE_UNITS, &imageUnits);
+        for (GLuint unit = 0; unit < static_cast<GLuint>(imageUnits); ++unit)
+        {
             ext->glBindImageTexture(unit, 0, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R8);
         }
         ext->glActiveTexture(GL_TEXTURE0 + state.getActiveTextureUnit());

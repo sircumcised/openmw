@@ -34,16 +34,24 @@ namespace SceneUtil
         return osg::Vec2f(2.f * offsetPixels.x() / sceneSize.x(), 2.f * offsetPixels.y() / sceneSize.y());
     }
 
-    osg::Vec2f reprojectUv(osg::Vec2f uv, float depth, const osg::Matrixf& invViewProj,
-        const osg::Matrixf& prevViewProj, bool reverseZ)
+    osg::Matrixf clipToPrevClip(
+        const osg::Matrixd& proj, const osg::Matrixd& view, const osg::Matrixd& prevView, const osg::Matrixd& prevProj)
+    {
+        return osg::Matrixf(osg::Matrixd::inverse(proj) * osg::Matrixd::inverse(view) * prevView * prevProj);
+    }
+
+    osg::Vec2f reprojectUv(osg::Vec2f uv, float depth, const osg::Matrixf& clipToPrevClip, bool reverseZ)
     {
         // reverse Z uses clip control zero-to-one, so NDC z is the depth value itself
         const float ndcZ = reverseZ ? depth : depth * 2.f - 1.f;
-        osg::Vec4f pos = osg::Vec4f(uv.x() * 2.f - 1.f, uv.y() * 2.f - 1.f, ndcZ, 1.f) * invViewProj;
-        pos /= pos.w();
-        const osg::Vec4f prev = pos * prevViewProj;
+        const osg::Vec4f prev = osg::Vec4f(uv.x() * 2.f - 1.f, uv.y() * 2.f - 1.f, ndcZ, 1.f) * clipToPrevClip;
         const osg::Vec2f prevUv(prev.x() / prev.w() * 0.5f + 0.5f, prev.y() / prev.w() * 0.5f + 0.5f);
         return prevUv - uv;
+    }
+
+    float fovYFromProjection(const osg::Matrixd& proj)
+    {
+        return static_cast<float>(2.0 * std::atan(1.0 / proj(1, 1)));
     }
 
     bool isCameraCut(const osg::Vec3f& prevPos, const osg::Vec3f& pos, float threshold)

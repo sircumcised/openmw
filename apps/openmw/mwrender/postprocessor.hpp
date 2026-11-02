@@ -148,12 +148,10 @@ namespace MWRender
         void disableUpscaler(std::string_view reason);
 
         void setJitterPixels(const osg::Vec2f& jitter) { mJitterPixels = jitter; }
-        void setUnjitteredProjection(const osg::Matrixf& projection) { mUnjitteredProjection = projection; }
+        void setUnjitteredProjection(const osg::Matrixd& projection) { mUnjitteredProjection = projection; }
         // called by PingPongCull once per frame; the getters below read what the cull of frameId stored
-        void updateViewProjection(const osg::Matrixf& view, size_t frameId);
+        void updateViewProjection(const osg::Matrixd& view, size_t frameId);
         osg::Vec2f getJitterPixels(size_t frameId) const { return mFrameJitter[frameId]; }
-        const osg::Matrixf& getUnjitteredViewProjection(size_t frameId) const { return mViewProj[frameId]; }
-        const osg::Matrixf& getPrevUnjitteredViewProjection(size_t frameId) const { return mPrevViewProj[frameId]; }
 
         Status enableTechnique(std::shared_ptr<Fx::Technique> technique, std::optional<int> location = std::nullopt);
 
@@ -287,11 +285,14 @@ namespace MWRender
         bool mUpscalerFailed = false;
         float mUpscaleScale = 1.f;
         osg::Vec2f mJitterPixels;
-        osg::Matrixf mUnjitteredProjection;
-        osg::Matrixf mLastViewProj;
+        osg::Matrixd mUnjitteredProjection;
+        osg::Matrixd mLastView;
+        osg::Matrixd mLastProj;
         std::array<osg::Vec2f, 2> mFrameJitter;
-        std::array<osg::Matrixf, 2> mViewProj;
-        std::array<osg::Matrixf, 2> mPrevViewProj;
+        std::array<osg::Matrixd, 2> mView;
+        std::array<osg::Matrixd, 2> mProj;
+        std::array<osg::Matrixd, 2> mPrevView;
+        std::array<osg::Matrixd, 2> mPrevProj;
         osg::Vec3f mLastEye;
         std::array<osg::Vec3f, 2> mEye;
         std::array<osg::Vec3f, 2> mPrevEye;

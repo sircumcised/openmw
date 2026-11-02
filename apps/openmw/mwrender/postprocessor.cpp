@@ -935,14 +935,17 @@ namespace MWRender
         resize();
     }
 
-    void PostProcessor::updateViewProjection(const osg::Matrixf& view, size_t frameId)
+    void PostProcessor::updateViewProjection(const osg::Matrixd& view, size_t frameId)
     {
         mFrameJitter[frameId] = mJitterPixels;
-        mPrevViewProj[frameId] = mLastViewProj;
-        mViewProj[frameId] = view * mUnjitteredProjection;
-        mLastViewProj = mViewProj[frameId];
+        mPrevView[frameId] = mLastView;
+        mPrevProj[frameId] = mLastProj;
+        mView[frameId] = view;
+        mProj[frameId] = mUnjitteredProjection;
+        mLastView = view;
+        mLastProj = mUnjitteredProjection;
         mPrevEye[frameId] = mLastEye;
-        mEye[frameId] = osg::Matrixf::inverse(view).getTrans();
+        mEye[frameId] = osg::Matrixd::inverse(view).getTrans();
         mLastEye = mEye[frameId];
     }
 
@@ -962,7 +965,10 @@ namespace MWRender
         const unsigned contextId = state.getContextID();
         const bool reverseZ = SceneUtil::AutoDepth::isReversed();
 
-        const osg::Vec4i size(sceneWidth(), sceneHeight(), renderWidth(), renderHeight());
+        const osg::Texture* sceneTexture = mTextures[frameId][Tex_Scene];
+        const osg::Texture* upscaledTexture = mTextures[frameId][Tex_Upscaled];
+        const osg::Vec4i size(sceneTexture->getTextureWidth(), sceneTexture->getTextureHeight(),
+            upscaledTexture->getTextureWidth(), upscaledTexture->getTextureHeight());
         if (!mUpscaler || size != mUpscalerSize)
         {
             if (!mUpscaler)
@@ -1002,12 +1008,13 @@ namespace MWRender
 
         inputs.mSceneSize = osg::Vec2i(size[0], size[1]);
         inputs.mJitterPixels = getJitterPixels(frameId);
-        inputs.mInvViewProj = osg::Matrixf::inverse(getUnjitteredViewProjection(frameId));
-        inputs.mPrevViewProj = getPrevUnjitteredViewProjection(frameId);
+        inputs.mClipToPrevClip
+            = SceneUtil::clipToPrevClip(mProj[frameId], mView[frameId], mPrevView[frameId], mPrevProj[frameId]);
         inputs.mSharpness = Settings::postProcessing().mUpscaleSharpness;
         inputs.mNear = mRendering.getNearClipDistance();
         inputs.mFar = mRendering.getViewDistance();
-        inputs.mFovY = osg::DegreesToRadians(mRendering.getFieldOfView());
+        // RenderingManager::getFieldOfView() is wrong while the FOV is overridden
+        inputs.mFovY = SceneUtil::fovYFromProjection(mProj[frameId]);
         inputs.mReverseZ = reverseZ;
 
         const double time = state.getFrameStamp()->getReferenceTime();

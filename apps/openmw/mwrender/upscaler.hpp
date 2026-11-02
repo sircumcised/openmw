@@ -32,8 +32,7 @@ namespace MWRender
             GLuint mOutput = 0;
             osg::Vec2i mSceneSize;
             osg::Vec2f mJitterPixels;
-            osg::Matrixf mInvViewProj;
-            osg::Matrixf mPrevViewProj;
+            osg::Matrixf mClipToPrevClip;
             float mFrameTimeMs = 0.f;
             float mSharpness = 0.f;
             float mNear = 0.f;

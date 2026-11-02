@@ -700,8 +700,11 @@ namespace MWRender
             mJitterNdc = SceneUtil::jitterToNdc(jitter, { sceneWidth, mPostProcessor->sceneHeight() });
             mUpdateProjectionMatrix = true;
         }
-        else
+        else if (mJitterNdc != osg::Vec2f())
+        {
             mJitterNdc = osg::Vec2f();
+            mUpdateProjectionMatrix = true;
+        }
 #endif
 
         if (mUpdateProjectionMatrix)
