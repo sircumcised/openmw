@@ -922,6 +922,14 @@ namespace MWRender
         resize();
     }
 
+    void PostProcessor::updateViewProjection(const osg::Matrixf& view, size_t frameId)
+    {
+        mFrameJitter[frameId] = mJitterPixels;
+        mPrevViewProj[frameId] = mLastViewProj;
+        mViewProj[frameId] = view * mUnjitteredProjection;
+        mLastViewProj = mViewProj[frameId];
+    }
+
     void PostProcessor::upscale(osg::State& state, size_t frameId)
     {
         if (!upscalerActive() || !mFbos[frameId][FBO_Upscaled])

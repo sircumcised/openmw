@@ -286,6 +286,9 @@ namespace MWRender
         }
         osg::Vec2f getProjectionOffset() const { return mProjectionOffset; }
 
+        // NerevarMoon upscaler: sub-pixel offset of this frame, in NDC
+        osg::Vec2f getJitterNdc() const { return mJitterNdc; }
+
     private:
         void updateTextureFiltering();
         void updateAmbient();
@@ -362,6 +365,7 @@ namespace MWRender
         bool mUpdateProjectionMatrix = false;
         bool mNight = false;
         osg::Vec2f mProjectionOffset;
+        osg::Vec2f mJitterNdc;
         const MWWorld::GroundcoverStore& mGroundCoverStore;
 
         void operator=(const RenderingManager&);

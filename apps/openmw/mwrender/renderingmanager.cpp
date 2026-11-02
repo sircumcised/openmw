@@ -40,6 +40,7 @@
 #include <components/sceneutil/visitor.hpp>
 #include <components/sceneutil/workqueue.hpp>
 #include <components/sceneutil/writescene.hpp>
+#include <components/sceneutil/upscalemath.hpp>
 
 #include <components/misc/constants.hpp>
 
@@ -76,6 +77,9 @@
 #include "objectpaging.hpp"
 #include "pathgrid.hpp"
 #include "postprocessor.hpp"
+#ifdef NM_FSR2
+#include "fsr2bridge.hpp"
+#endif
 #include "recastmesh.hpp"
 #include "screenshotmanager.hpp"
 #include "sky.hpp"
@@ -673,6 +677,22 @@ namespace MWRender
         updateNavMesh();
         updateRecastMesh();
 
+#ifdef NM_FSR2
+        if (mPostProcessor->upscalerActive())
+        {
+            const int sceneWidth = mPostProcessor->sceneWidth();
+            const int phases = Fsr2Bridge::jitterPhaseCount(sceneWidth, mPostProcessor->renderWidth());
+            const int index = static_cast<int>(mViewer->getFrameStamp()->getFrameNumber() % phases);
+            osg::Vec2f jitter;
+            Fsr2Bridge::jitterOffset(jitter.x(), jitter.y(), index, phases);
+            mPostProcessor->setJitterPixels(jitter);
+            mJitterNdc = SceneUtil::jitterToNdc(jitter, { sceneWidth, mPostProcessor->sceneHeight() });
+            mUpdateProjectionMatrix = true;
+        }
+        else
+            mJitterNdc = osg::Vec2f();
+#endif
+
         if (mUpdateProjectionMatrix)
         {
             mUpdateProjectionMatrix = false;
@@ -1143,6 +1163,16 @@ namespace MWRender
 
             projectionMatrix.postMult(translation);
             unreversedProjectionMatrix.postMult(translation);
+        }
+
+        if (mPostProcessor)
+            mPostProcessor->setUnjitteredProjection(projectionMatrix);
+
+        if (mJitterNdc != osg::Vec2f())
+        {
+            const osg::Matrix jitter = osg::Matrix::translate(mJitterNdc.x(), mJitterNdc.y(), 0.0);
+            projectionMatrix.postMult(jitter);
+            unreversedProjectionMatrix.postMult(jitter);
         }
 
         // We always set the cameras projection matrix to the un-reversed variant for correct frustum culling.

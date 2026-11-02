@@ -50,6 +50,9 @@ namespace MWRender
         mPostProcessor->getStateUpdater()->setPrevViewMatrix(mLastViewMatrix[0]);
         mLastViewMatrix[0] = cv->getCurrentCamera()->getViewMatrix();
 
+        if (mPostProcessor->upscalerActive())
+            mPostProcessor->updateViewProjection(cv->getCurrentCamera()->getViewMatrix(), frameId);
+
         mPostProcessor->getStateUpdater()->setEyePos(cv->getEyePoint());
         mPostProcessor->getStateUpdater()->setEyeVec(cv->getLookVectorLocal());
 

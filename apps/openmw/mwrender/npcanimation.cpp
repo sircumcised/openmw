@@ -384,8 +384,9 @@ namespace MWRender
 
                 osg::Vec2f offset = mRenderingManager->getProjectionOffset();
 
-                double offsetX = (offset.x() / cv->getViewport()->width()) * 2.0;
-                double offsetY = (offset.y() / cv->getViewport()->height()) * 2.0;
+                const osg::Vec2f jitter = mRenderingManager->getJitterNdc();
+                double offsetX = (offset.x() / cv->getViewport()->width()) * 2.0 + jitter.x();
+                double offsetY = (offset.y() / cv->getViewport()->height()) * 2.0 + jitter.y();
 
                 const osg::Matrix translation = osg::Matrix::translate(offsetX, offsetY, 0.0);
                 newProjectionMatrix->postMult(translation);
