@@ -77,6 +77,9 @@ namespace MWRender
 
         size_t frameId = state.getFrameStamp()->getFrameNumber() % 2;
 
+        // the upscaler dirties all state attributes, which clears the current viewport
+        auto* resolveViewport = state.getCurrentViewport();
+
         if (mUpscale)
             mUpscale(state, frameId);
 
@@ -93,8 +96,6 @@ namespace MWRender
 
             filtered.push_back(i);
         }
-
-        auto* resolveViewport = state.getCurrentViewport();
 
         if (filtered.empty() || !mPostprocessing)
         {

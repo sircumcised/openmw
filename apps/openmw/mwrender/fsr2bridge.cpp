@@ -75,7 +75,8 @@ namespace MWRender::Fsr2Bridge
             code != FFX_OK)
             return errorText("ffxFsr2GetInterfaceGL", code);
 
-        desc.flags = reverseZ ? FFX_FSR2_ENABLE_DEPTH_INVERTED : 0;
+        // the GL backend has no device or command list, dispatch refuses null ones without this flag
+        desc.flags = FFX_FSR2_ALLOW_NULL_DEVICE_AND_COMMAND_LIST | (reverseZ ? FFX_FSR2_ENABLE_DEPTH_INVERTED : 0);
         desc.maxRenderSize = { static_cast<uint32_t>(sceneWidth), static_cast<uint32_t>(sceneHeight) };
         desc.displaySize = { static_cast<uint32_t>(outputWidth), static_cast<uint32_t>(outputHeight) };
         desc.device = nullptr;
