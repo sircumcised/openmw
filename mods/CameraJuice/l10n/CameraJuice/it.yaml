@@ -6,6 +6,12 @@ groupName: "Effetti in prima persona"
 enabled: "Attiva Camera Juice"
 enabledDescription: "Attiva o disattiva tutti gli effetti. Gli effetti valgono solo in prima persona."
 
+headBob: "Oscillazione della testa"
+headBobDescription: |
+    Intensità del movimento della testa mentre si cammina: un abbassamento a ogni passo e un ondeggiamento laterale.
+    Si spegne da sola se è attiva l'oscillazione della testa integrata in OpenMW. 0 la disattiva.
+    (predefinito: 1.0)
+
 strafeTilt: "Inclinazione laterale (gradi)"
 strafeTiltDescription: |
     Rollio della telecamera quando ci si muove di lato.

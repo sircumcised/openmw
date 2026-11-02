@@ -8,6 +8,7 @@ It ports the effects from the StayAtHomeDev tutorial "Camera Juice & Effects, Go
 
 | Effect | Trigger | Camera change |
 |---|---|---|
+| Head bob | walking or running on the ground | head drops 2.5 units per step and sways 1.2 units sideways, in step with the feet |
 | Strafe tilt | moving sideways | roll toward the movement side, 1.5 degrees |
 | Turn lean | fast mouse or stick turn | roll toward the turn side, up to 1 degree at 4 rad/s |
 | Jump and landing impact | jump start, landing after a fall over 200 units/s | head dips on a damped spring and looks down, one bounce |
@@ -16,7 +17,7 @@ It ports the effects from the StayAtHomeDev tutorial "Camera Juice & Effects, Go
 | Idle breathing | standing still for about 1 s | slow 4.5 s up and down motion |
 
 All effects run only in first person.
-They add to the built-in head bobbing, so both work together.
+The mod head bob turns itself off while the built-in OpenMW head bobbing is enabled, so the two never stack.
 Every effect has a strength setting in Options, Scripts, Camera Juice.
 
 ## Install

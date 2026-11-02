@@ -6,6 +6,12 @@ groupName: "First Person Effects"
 enabled: "Enable Camera Juice"
 enabledDescription: "Turns all effects on or off. Effects only apply in first person view."
 
+headBob: "Head Bob"
+headBobDescription: |
+    Strength of the head motion while walking: a drop on every step and a side sway.
+    Turns itself off while the built-in OpenMW head bobbing is enabled. 0 disables it.
+    (default: 1.0)
+
 strafeTilt: "Strafe Tilt (degrees)"
 strafeTiltDescription: |
     Camera roll while moving sideways.

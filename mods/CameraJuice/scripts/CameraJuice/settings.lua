@@ -36,6 +36,7 @@ I.Settings.registerGroup({
     permanentStorage = true,
     settings = {
         boolSetting('enabled', true),
+        numberSetting('headBob', 1.0, 0, 5),
         numberSetting('strafeTilt', 1.5, -10, 10),
         numberSetting('turnLean', 1.0, -10, 10),
         numberSetting('landingImpact', 1.0, 0, 5),

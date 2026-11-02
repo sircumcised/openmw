@@ -1,6 +1,6 @@
 -- Camera Juice: first person camera effects for OpenMW.
 --
--- Effects: strafe tilt, turn lean, jump and landing impact (damped spring),
+-- Effects: walking head bob, strafe tilt, turn lean, jump and landing impact (damped spring),
 -- sprint FOV, damage shake (trauma model) and idle breathing sway.
 --
 -- The built-in camera script (scripts/omw/camera/camera.lua) resets the extra
@@ -34,6 +34,7 @@ local function updateSettings()
     cfg.sprintFov = math.rad(settings:get('sprintFov'))
     cfg.damageShake = settings:get('damageShake')
     cfg.idleSway = settings:get('idleSway')
+    cfg.headBob = settings:get('headBob')
 end
 
 updateSettings()
@@ -67,6 +68,15 @@ local IDLE_FADE_RATE = 1.5       -- 1/s
 local BREATH_PERIOD = 4.5        -- seconds per breath
 local BREATH_PITCH = 0.004       -- rad
 local BREATH_HEIGHT = 0.6        -- units
+
+local BOB_STEP_LENGTH = 90       -- units walked per step, same default as the built-in head bobbing
+local BOB_HEIGHT = 2.5           -- units of vertical bob per step at walking speed
+local BOB_SIDE = 1.2             -- units of side sway per double step at walking speed
+local BOB_ROLL = math.rad(0.35)  -- roll that follows the side sway
+local BOB_PITCH = math.rad(0.2)  -- small nod on each step
+local BOB_WALK_SPEED = 150       -- speed that gives amplitude 1
+local BOB_MAX_SCALE = 1.6        -- amplitude cap while running
+local BOB_FADE_RATE = 6          -- 1/s, fade in and out on start, stop, jump and landing
 
 -- Frame-rate independent exponential approach of `current` to `target`.
 local function approach(current, target, rate, dt)
@@ -105,6 +115,9 @@ local prevHealth = nil
 local idleWeight = 0
 local breathTime = 0
 
+local bobDistance = 0
+local bobWeight = 0
+
 local function resetTracking()
     prevYaw = nil
     prevZ = nil
@@ -118,6 +131,7 @@ local function resetEffects()
     dip, dipVelocity = 0, 0
     trauma = 0
     idleWeight = 0
+    bobWeight = 0
     resetTracking()
 end
 
@@ -222,6 +236,31 @@ local function updateIdle(dt, speed)
     return math.sin(breathTime / BREATH_PERIOD * 2 * math.pi) * idleWeight * cfg.idleSway
 end
 
+-- Walking head bob: the head drops on every step and sways sideways once per two steps.
+-- The phase follows the distance walked, so the bob stays in step with the feet at any speed.
+-- It turns itself off while the built-in OpenMW head bobbing is enabled, so the two never stack.
+local function updateHeadBob(dt, speed)
+    local builtinBob = I.Camera and I.Camera.isHeadBobbingEnabled and I.Camera.isHeadBobbingEnabled()
+    local active = cfg.headBob > 0 and not builtinBob
+    local target = 0
+    if active and Actor.isOnGround(self) and not Actor.isSwimming(self) then
+        target = util.clamp(speed / BOB_WALK_SPEED, 0, BOB_MAX_SCALE)
+    end
+    bobWeight = approach(bobWeight, target, BOB_FADE_RATE, dt)
+    bobDistance = (bobDistance + speed * dt) % (BOB_STEP_LENGTH * 2)
+    if bobWeight < 1e-3 then return 0, 0, 0, 0 end
+
+    local phase = bobDistance / (BOB_STEP_LENGTH * 2) * 2 * math.pi -- one turn per two steps
+    local step = math.cos(phase * 2)                                 -- 1 at mid stride, -1 at foot strike
+    local side = math.sin(phase)
+    local w = bobWeight * cfg.headBob
+    local height = step * BOB_HEIGHT * 0.5 * w
+    local sideOffset = side * BOB_SIDE * w
+    local roll = -side * BOB_ROLL * w
+    local pitch = -step * BOB_PITCH * 0.5 * w
+    return height, sideOffset, roll, pitch
+end
+
 local function onFrame(dt)
     -- Same guard as the built-in camera script: with dt == 0 onUpdate did not reset the
     -- extra angles this frame, so adding to them would accumulate.
@@ -242,8 +281,10 @@ local function onFrame(dt)
     updateFov(dt, speed)
     local shake = updateTrauma(dt)
     local breath = updateIdle(dt, speed)
+    local bobHeight, bobSide, bobRoll, bobPitch = updateHeadBob(dt, speed)
+    roll = roll + bobRoll
 
-    local pitch = -dipOffset * DIP_PITCH_PER_UNIT + breath * BREATH_PITCH
+    local pitch = -dipOffset * DIP_PITCH_PER_UNIT + breath * BREATH_PITCH + bobPitch
     local yaw = 0
     if shake > 0 then
         pitch = pitch + shake * noise(shakeTime, 1.0)
@@ -254,7 +295,8 @@ local function onFrame(dt)
     camera.setExtraPitch(camera.getExtraPitch() + pitch)
     camera.setExtraYaw(camera.getExtraYaw() + yaw)
     camera.setExtraRoll(camera.getExtraRoll() + roll)
-    camera.setFirstPersonOffset(camera.getFirstPersonOffset() + util.vector3(0, 0, dipOffset + breath * BREATH_HEIGHT))
+    camera.setFirstPersonOffset(camera.getFirstPersonOffset()
+        + util.vector3(bobSide, 0, dipOffset + breath * BREATH_HEIGHT + bobHeight))
 end
 
 return {
