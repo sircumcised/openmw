@@ -129,6 +129,8 @@ namespace MWRender
     {
         auto& shaderManager = mRendering.getResourceSystem()->getSceneManager()->getShaderManager();
 
+        Log(Debug::Info) << "Scene frame buffers: " << mSamples << "x MSAA";
+
         mUpscaleScale = Settings::postProcessing().mUpscaleScale;
 #ifndef NM_FSR2
         if (Settings::postProcessing().mUpscaler.get() == "fsr2")

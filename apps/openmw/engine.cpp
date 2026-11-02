@@ -495,7 +495,10 @@ void OMW::Engine::createWindow()
     const Settings::WindowMode windowMode = Settings::video().mWindowMode;
     const bool windowBorder = Settings::video().mWindowBorder;
     const SDLUtil::VSyncMode vsync = Settings::video().mVsyncMode;
-    unsigned antialiasing = static_cast<unsigned>(Settings::video().mAntialiasing);
+    // NerevarMoon: the scene renders into the post processor's multisampled frame buffers, which read
+    // [Video] antialiasing themselves. Some drivers give the window 0 samples, and the fallback below then
+    // wrote antialiasing = 0 and turned MSAA off everywhere, so the window asks for none.
+    unsigned antialiasing = 0;
 
     int posX = SDL_WINDOWPOS_CENTERED_DISPLAY(screen);
     int posY = SDL_WINDOWPOS_CENTERED_DISPLAY(screen);
