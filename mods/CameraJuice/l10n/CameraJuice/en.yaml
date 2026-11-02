@@ -1,0 +1,43 @@
+pageName: "Camera Juice"
+pageDescription: "First person camera effects: strafe tilt, turn lean, jump and landing impact, sprint FOV, damage shake and idle breathing."
+
+groupName: "First Person Effects"
+
+enabled: "Enable Camera Juice"
+enabledDescription: "Turns all effects on or off. Effects only apply in first person view."
+
+strafeTilt: "Strafe Tilt (degrees)"
+strafeTiltDescription: |
+    Camera roll while moving sideways.
+    Negative values tilt the other way. 0 disables it.
+    (default: 1.5)
+
+turnLean: "Turn Lean (degrees)"
+turnLeanDescription: |
+    Camera roll while turning quickly with the mouse or stick.
+    Negative values lean the other way. 0 disables it.
+    (default: 1.0)
+
+landingImpact: "Jump and Landing Impact"
+landingImpactDescription: |
+    Strength of the head dip on landing and of the small lag when a jump starts.
+    Higher falls give a deeper dip. 0 disables it.
+    (default: 1.0)
+
+sprintFov: "Sprint FOV Boost (degrees)"
+sprintFovDescription: |
+    Extra field of view at full running speed.
+    0 disables it. Disable it when another mod controls the field of view.
+    (default: 6)
+
+damageShake: "Damage Shake"
+damageShakeDescription: |
+    Strength of the camera shake when the player loses health.
+    Bigger hits shake harder. 0 disables it.
+    (default: 1.0)
+
+idleSway: "Idle Breathing"
+idleSwayDescription: |
+    Strength of the slow breathing motion while standing still.
+    0 disables it.
+    (default: 1.0)

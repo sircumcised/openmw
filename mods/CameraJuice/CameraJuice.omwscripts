@@ -1,0 +1,3 @@
+# Camera Juice: first person camera effects.
+MENU: scripts/CameraJuice/settings.lua
+PLAYER: scripts/CameraJuice/player.lua
