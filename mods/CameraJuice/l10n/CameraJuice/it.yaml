@@ -1,0 +1,49 @@
+pageName: "Camera Juice"
+pageDescription: "Effetti della telecamera in prima persona: inclinazione laterale, inclinazione in virata, impatto di salto e atterraggio, FOV in corsa, scossa da danno e respiro da fermo."
+
+groupName: "Effetti in prima persona"
+
+enabled: "Attiva Camera Juice"
+enabledDescription: "Attiva o disattiva tutti gli effetti. Gli effetti valgono solo in prima persona."
+
+headBob: "Oscillazione della testa"
+headBobDescription: |
+    Intensità del movimento della testa mentre si cammina: un abbassamento a ogni passo e un ondeggiamento laterale.
+    Si spegne da sola se è attiva l'oscillazione della testa integrata in OpenMW. 0 la disattiva.
+    (predefinito: 1.0)
+
+strafeTilt: "Inclinazione laterale (gradi)"
+strafeTiltDescription: |
+    Rollio della telecamera quando ci si muove di lato.
+    I valori negativi inclinano dall'altra parte. 0 lo disattiva.
+    (predefinito: 1.5)
+
+turnLean: "Inclinazione in virata (gradi)"
+turnLeanDescription: |
+    Rollio della telecamera quando si gira velocemente con mouse o stick.
+    I valori negativi inclinano dall'altra parte. 0 lo disattiva.
+    (predefinito: 1.0)
+
+landingImpact: "Impatto di salto e atterraggio"
+landingImpactDescription: |
+    Intensità dell'abbassamento della testa all'atterraggio e del piccolo ritardo a inizio salto.
+    Cadute più alte danno un abbassamento più profondo. 0 lo disattiva.
+    (predefinito: 1.0)
+
+sprintFov: "Aumento FOV in corsa (gradi)"
+sprintFovDescription: |
+    Campo visivo aggiuntivo alla massima velocità di corsa.
+    0 lo disattiva. Disattivalo se un'altra mod controlla il campo visivo.
+    (predefinito: 6)
+
+damageShake: "Scossa da danno"
+damageShakeDescription: |
+    Intensità della scossa della telecamera quando il giocatore perde salute.
+    Colpi più forti scuotono di più. 0 la disattiva.
+    (predefinito: 1.0)
+
+idleSway: "Respiro da fermo"
+idleSwayDescription: |
+    Intensità del lento movimento di respiro quando si sta fermi.
+    0 lo disattiva.
+    (predefinito: 1.0)
