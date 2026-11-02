@@ -3,8 +3,6 @@
 #include <ffx_fsr2.h>
 #include <gl/ffx_fsr2_gl.h>
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <Windows.h>
 
 #include <cstdint>
@@ -14,13 +12,18 @@ namespace MWRender::Fsr2Bridge
 {
     namespace
     {
-        // wglGetProcAddress only knows functions newer than OpenGL 1.1
+        // wglGetProcAddress only knows functions newer than OpenGL 1.1; it is looked up at run time because
+        // wingdi.h is not visible next to glad/gl.h
         ffx_glProc loadGl(const char* name)
         {
-            PROC proc = wglGetProcAddress(name);
+            using WglGetProcAddress = PROC(WINAPI*)(LPCSTR);
+            static const HMODULE opengl = GetModuleHandleA("opengl32.dll");
+            static const auto wglGetProcAddressPtr
+                = reinterpret_cast<WglGetProcAddress>(GetProcAddress(opengl, "wglGetProcAddress"));
+            PROC proc = wglGetProcAddressPtr ? wglGetProcAddressPtr(name) : nullptr;
             const auto value = reinterpret_cast<std::intptr_t>(proc);
             if (value == 0 || value == 1 || value == 2 || value == 3 || value == -1)
-                proc = GetProcAddress(GetModuleHandleA("opengl32.dll"), name);
+                proc = GetProcAddress(opengl, name);
             return reinterpret_cast<ffx_glProc>(proc);
         }
 
