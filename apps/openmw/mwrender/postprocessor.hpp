@@ -56,8 +56,8 @@ namespace MWRender
     class PostProcessor : public osg::Group
     {
     public:
-        using FBOArray = std::array<osg::ref_ptr<osg::FrameBufferObject>, 6>;
-        using TextureArray = std::array<osg::ref_ptr<osg::Texture>, 6>;
+        using FBOArray = std::array<osg::ref_ptr<osg::FrameBufferObject>, 7>;
+        using TextureArray = std::array<osg::ref_ptr<osg::Texture>, 8>;
         using TechniqueList = std::vector<std::shared_ptr<Fx::Technique>>;
 
         enum TextureIndex
@@ -68,6 +68,8 @@ namespace MWRender
             Tex_OpaqueDepth,
             Tex_Normal,
             Tex_Distortion,
+            Tex_Upscaled,
+            Tex_FirstPersonDepth,
         };
 
         enum FBOIndex
@@ -78,6 +80,7 @@ namespace MWRender
             FBO_OpaqueDepth,
             FBO_Intercept,
             FBO_Distortion,
+            FBO_Upscaled,
         };
 
         enum TextureUnits
@@ -131,6 +134,13 @@ namespace MWRender
         const auto& getTechniqueFiles() const { return mTechniqueFiles; }
 
         void resize();
+
+        // NerevarMoon upscaler: the scene renders at sceneWidth() x sceneHeight(), the HUD and the shader chain at
+        // renderWidth() x renderHeight()
+        bool upscalerActive() const;
+        int sceneWidth() const;
+        int sceneHeight() const;
+        void disableUpscaler(std::string_view reason);
 
         Status enableTechnique(std::shared_ptr<Fx::Technique> technique, std::optional<int> location = std::nullopt);
 
@@ -222,6 +232,8 @@ namespace MWRender
 
         void cull(unsigned frameId, osgUtil::CullVisitor* cv);
 
+        void upscale(osg::State& state, size_t frameId);
+
         osg::ref_ptr<osg::Group> mRootNode;
         osg::ref_ptr<osg::Camera> mHUDCamera;
 
@@ -257,6 +269,8 @@ namespace MWRender
         bool mExteriorFlag = false;
         bool mNormalsSupported = false;
         bool mPrevPassLights = false;
+        bool mUpscalerFailed = false;
+        float mUpscaleScale = 1.f;
 
         int mGLSLVersion;
         int mWidth;

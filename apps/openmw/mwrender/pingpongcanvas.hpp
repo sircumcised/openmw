@@ -2,6 +2,7 @@
 #define OPENMW_MWRENDER_PINGPONGCANVAS_H
 
 #include <array>
+#include <functional>
 #include <optional>
 
 #include <osg/FrameBufferObject>
@@ -54,6 +55,9 @@ namespace MWRender
 
         void setPostProcessing(bool enabled) { mPostprocessing = enabled; }
 
+        // NerevarMoon: fills the scene texture from the low resolution scene before anything reads it
+        void setUpscaleCallback(std::function<void(osg::State&, size_t)> callback) { mUpscale = std::move(callback); }
+
         const osg::ref_ptr<osg::Texture>& getSceneTexture(size_t frameId) const { return mTextureScene; }
 
     private:
@@ -69,6 +73,7 @@ namespace MWRender
         osg::ref_ptr<osg::StateSet> mMultiviewResolveStateSet;
 
         osg::ref_ptr<osg::Texture> mTextureScene;
+        std::function<void(osg::State&, size_t)> mUpscale;
         osg::ref_ptr<osg::Texture> mTextureDepth;
         osg::ref_ptr<osg::Texture> mTextureNormals;
         osg::ref_ptr<osg::Texture> mTextureDistortion;

@@ -19,6 +19,7 @@
 #include <components/sceneutil/color.hpp>
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/nodecallback.hpp>
+#include <components/sceneutil/upscalemath.hpp>
 #include <components/settings/values.hpp>
 #include <components/shader/shadermanager.hpp>
 #include <components/stereo/multiview.hpp>
@@ -128,10 +129,23 @@ namespace MWRender
     {
         auto& shaderManager = mRendering.getResourceSystem()->getSceneManager()->getShaderManager();
 
+        mUpscaleScale = Settings::postProcessing().mUpscaleScale;
+#ifndef NM_FSR2
+        if (Settings::postProcessing().mUpscaler.get() == "fsr2")
+            Log(Debug::Error) << "[upscaler] fsr2 unavailable: engine built without NM_FSR2";
+#endif
+        // FSR2 wants a scene without multisampling
+        if (upscalerActive())
+            mSamples = 0;
+
         std::shared_ptr<LuminanceCalculator> luminanceCalculator = std::make_shared<LuminanceCalculator>(shaderManager);
 
         for (auto& canvas : mCanvases)
+        {
             canvas = new PingPongCanvas(shaderManager, luminanceCalculator);
+            if (upscalerActive())
+                canvas->setUpscaleCallback([this](osg::State& state, size_t frameId) { upscale(state, frameId); });
+        }
 
         mHUDCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
         mHUDCamera->setRenderOrder(osg::Camera::POST_RENDER);
@@ -240,7 +254,7 @@ namespace MWRender
         createObjectsForFrame(frameId);
 
         mRendering.updateProjectionMatrix();
-        mRendering.setScreenRes(renderWidth(), renderHeight());
+        mRendering.setScreenRes(sceneWidth(), sceneHeight());
 
         dirtyTechniques(true);
 
@@ -298,7 +312,7 @@ namespace MWRender
         mCanvases[frameId]->setMask(mUnderwater, mExteriorFlag);
         mCanvases[frameId]->setCalculateAvgLum(mHDR);
 
-        mCanvases[frameId]->setTextureScene(getTexture(Tex_Scene, frameId));
+        mCanvases[frameId]->setTextureScene(getTexture(upscalerActive() ? Tex_Upscaled : Tex_Scene, frameId));
         mCanvases[frameId]->setTextureDepth(getTexture(Tex_OpaqueDepth, frameId));
         mCanvases[frameId]->setTextureDistortion(getTexture(Tex_Distortion, frameId));
 
@@ -311,8 +325,13 @@ namespace MWRender
 
         size_t frame = cv->getTraversalNumber();
 
-        mStateUpdater->setResolution(osg::Vec2f(
-            static_cast<float>(cv->getViewport()->width()), static_cast<float>(cv->getViewport()->height())));
+        // with the upscaler the viewport here is the low resolution scene, the shaders run at full resolution
+        if (upscalerActive())
+            mStateUpdater->setResolution(
+                osg::Vec2f(static_cast<float>(renderWidth()), static_cast<float>(renderHeight())));
+        else
+            mStateUpdater->setResolution(osg::Vec2f(
+                static_cast<float>(cv->getViewport()->width()), static_cast<float>(cv->getViewport()->height())));
 
         // per-frame data
         if (frame != mLastFrameNumber)
@@ -436,8 +455,8 @@ namespace MWRender
     {
         auto& textures = mTextures[frameId];
 
-        int width = renderWidth();
-        int height = renderHeight();
+        int width = sceneWidth();
+        int height = sceneHeight();
 
         for (osg::ref_ptr<osg::Texture>& texture : textures)
         {
@@ -481,7 +500,21 @@ namespace MWRender
         setupDepth(textures[Tex_OpaqueDepth]);
         textures[Tex_OpaqueDepth]->setName("opaqueTexMap");
 
+        textures[Tex_Upscaled]->setSourceFormat(GL_RGBA);
+        textures[Tex_Upscaled]->setSourceType(GL_FLOAT);
+        textures[Tex_Upscaled]->setInternalFormat(GL_RGBA16F_ARB);
+        Stereo::setMultiviewCompatibleTextureSize(textures[Tex_Upscaled], renderWidth(), renderHeight());
+        textures[Tex_Upscaled]->dirtyTextureObject();
+
         auto& fbos = mFbos[frameId];
+
+        fbos[FBO_Upscaled] = nullptr;
+        if (upscalerActive())
+        {
+            fbos[FBO_Upscaled] = new osg::FrameBufferObject;
+            fbos[FBO_Upscaled]->setAttachment(
+                osg::Camera::COLOR_BUFFER0, Stereo::createMultiviewCompatibleAttachment(textures[Tex_Upscaled]));
+        }
 
         fbos[FBO_Primary] = new osg::FrameBufferObject;
         fbos[FBO_Primary]->setAttachment(
@@ -857,6 +890,50 @@ namespace MWRender
 
         if (erased)
             dirtyTechniques();
+    }
+
+    bool PostProcessor::upscalerActive() const
+    {
+#ifdef NM_FSR2
+        return !mUpscalerFailed && !Stereo::getStereo() && Settings::postProcessing().mUpscaler.get() == "fsr2";
+#else
+        return false;
+#endif
+    }
+
+    int PostProcessor::sceneWidth() const
+    {
+        if (!upscalerActive())
+            return renderWidth();
+        return SceneUtil::upscaleSceneSize({ renderWidth(), renderHeight() }, mUpscaleScale).x();
+    }
+
+    int PostProcessor::sceneHeight() const
+    {
+        if (!upscalerActive())
+            return renderHeight();
+        return SceneUtil::upscaleSceneSize({ renderWidth(), renderHeight() }, mUpscaleScale).y();
+    }
+
+    void PostProcessor::disableUpscaler(std::string_view reason)
+    {
+        Log(Debug::Error) << "[upscaler] fsr2 unavailable: " << reason;
+        mUpscalerFailed = true;
+        resize();
+    }
+
+    void PostProcessor::upscale(osg::State& state, size_t frameId)
+    {
+        if (!upscalerActive() || !mFbos[frameId][FBO_Upscaled])
+            return;
+
+        // shortcut: plain bilinear stretch until the FSR2 dispatch replaces it
+        osg::GLExtensions* ext = state.get<osg::GLExtensions>();
+        mFbos[frameId][FBO_Primary]->apply(state, osg::FrameBufferObject::READ_FRAMEBUFFER);
+        mFbos[frameId][FBO_Upscaled]->apply(state, osg::FrameBufferObject::DRAW_FRAMEBUFFER);
+        ext->glBlitFramebuffer(0, 0, sceneWidth(), sceneHeight(), 0, 0, renderWidth(), renderHeight(),
+            GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
     }
 
     int PostProcessor::renderWidth() const

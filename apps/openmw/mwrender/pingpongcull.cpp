@@ -69,9 +69,17 @@ namespace MWRender
                 Stereo::setMultiviewMSAAResolveCallback(renderStage);
         }
 
+        // NerevarMoon upscaler: the scene renders at the upscaler's lower resolution
+        if (!mViewportStateset && mPostProcessor->upscalerActive())
+        {
+            mViewportStateset = new osg::StateSet();
+            mViewport = new osg::Viewport;
+            mViewportStateset->setAttribute(mViewport);
+        }
+
         if (mViewportStateset)
         {
-            mViewport->setViewport(0, 0, mPostProcessor->renderWidth(), mPostProcessor->renderHeight());
+            mViewport->setViewport(0, 0, mPostProcessor->sceneWidth(), mPostProcessor->sceneHeight());
             renderStage->setViewport(mViewport);
             cv->pushStateSet(mViewportStateset.get());
             traverse(node, cv);

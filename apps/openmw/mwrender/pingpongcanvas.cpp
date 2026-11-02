@@ -77,6 +77,9 @@ namespace MWRender
 
         size_t frameId = state.getFrameStamp()->getFrameNumber() % 2;
 
+        if (mUpscale)
+            mUpscale(state, frameId);
+
         std::vector<size_t> filtered;
 
         filtered.reserve(mPasses.size());

@@ -1159,6 +1159,10 @@ namespace MWRender
             setScreenRes(res.x(), res.y());
             Stereo::Manager::instance().setMasterProjectionMatrix(mPerViewUniformStateUpdater->getProjectionMatrix());
         }
+        else if (mPostProcessor && mPostProcessor->upscalerActive())
+        {
+            setScreenRes(mPostProcessor->sceneWidth(), mPostProcessor->sceneHeight());
+        }
         else
         {
             setScreenRes(width, height);
