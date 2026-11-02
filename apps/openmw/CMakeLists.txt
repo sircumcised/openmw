@@ -192,7 +192,7 @@ target_link_libraries(openmw-lib
 )
 
 if (NM_FSR2)
-    target_sources(openmw-lib PRIVATE mwrender/fsr2bridge.cpp)
+    target_sources(openmw-lib PRIVATE mwrender/fsr2bridge.cpp mwrender/upscaler.cpp)
     # the FSR2 headers bring their own glad/gl.h, which must come before any OSG or GL header
     set_source_files_properties(mwrender/fsr2bridge.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
     target_link_libraries(openmw-lib fsr2gl)

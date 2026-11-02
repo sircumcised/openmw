@@ -2,6 +2,7 @@
 #define OPENMW_MWRENDER_POSTPROCESSOR_H
 
 #include <array>
+#include <atomic>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -12,6 +13,7 @@
 #include <osg/FrameBufferObject>
 #include <osg/Group>
 #include <osg/Texture2D>
+#include <osg/Vec4i>
 
 #include <osgViewer/Viewer>
 
@@ -21,6 +23,9 @@
 #include <components/misc/strings/algorithm.hpp>
 
 #include "pingpongcanvas.hpp"
+#ifdef NM_FSR2
+#include "upscaler.hpp"
+#endif
 #include "transparentpass.hpp"
 
 #include <memory>
@@ -241,6 +246,8 @@ namespace MWRender
         void cull(unsigned frameId, osgUtil::CullVisitor* cv);
 
         void upscale(osg::State& state, size_t frameId);
+        // draw thread side of disableUpscaler: the update traversal picks it up
+        void failUpscaler(std::string reason);
 
         osg::ref_ptr<osg::Group> mRootNode;
         osg::ref_ptr<osg::Camera> mHUDCamera;
@@ -285,6 +292,17 @@ namespace MWRender
         std::array<osg::Vec2f, 2> mFrameJitter;
         std::array<osg::Matrixf, 2> mViewProj;
         std::array<osg::Matrixf, 2> mPrevViewProj;
+        osg::Vec3f mLastEye;
+        std::array<osg::Vec3f, 2> mEye;
+        std::array<osg::Vec3f, 2> mPrevEye;
+        std::atomic<bool> mUpscalerFailurePending = false;
+        std::string mUpscalerFailureReason;
+#ifdef NM_FSR2
+        std::unique_ptr<Fsr2Upscaler> mUpscaler;
+        osg::Vec4i mUpscalerSize;
+        bool mUpscalerFresh = true;
+        double mLastUpscaleTime = 0.0;
+#endif
 
         int mGLSLVersion;
         int mWidth;

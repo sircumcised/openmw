@@ -400,6 +400,9 @@ namespace MWRender
 
     void PostProcessor::update(size_t frameId)
     {
+        if (mUpscalerFailurePending.exchange(false))
+            disableUpscaler(mUpscalerFailureReason);
+
         while (!mQueuedTemplates.empty())
         {
             mTemplates.push_back(std::move(mQueuedTemplates.back()));
@@ -527,10 +530,20 @@ namespace MWRender
 
         fbos[FBO_FirstPerson] = new osg::FrameBufferObject;
 
-        auto fpDepthRb = createFrameBufferAttachmentFromTemplate(
-            Usage::RENDER_BUFFER, width, height, textures[Tex_Depth], mSamples);
-        fbos[FBO_FirstPerson]->setAttachment(osg::FrameBufferObject::BufferComponent::PACKED_DEPTH_STENCIL_BUFFER,
-            osg::FrameBufferAttachment(fpDepthRb));
+        if (upscalerActive())
+        {
+            // the upscaler reads it back to find the pixels of arms and weapon
+            setupDepth(textures[Tex_FirstPersonDepth]);
+            fbos[FBO_FirstPerson]->setAttachment(osg::FrameBufferObject::BufferComponent::PACKED_DEPTH_STENCIL_BUFFER,
+                Stereo::createMultiviewCompatibleAttachment(textures[Tex_FirstPersonDepth]));
+        }
+        else
+        {
+            auto fpDepthRb = createFrameBufferAttachmentFromTemplate(
+                Usage::RENDER_BUFFER, width, height, textures[Tex_Depth], mSamples);
+            fbos[FBO_FirstPerson]->setAttachment(osg::FrameBufferObject::BufferComponent::PACKED_DEPTH_STENCIL_BUFFER,
+                osg::FrameBufferAttachment(fpDepthRb));
+        }
 
         if (mSamples > 1)
         {
@@ -928,20 +941,99 @@ namespace MWRender
         mPrevViewProj[frameId] = mLastViewProj;
         mViewProj[frameId] = view * mUnjitteredProjection;
         mLastViewProj = mViewProj[frameId];
+        mPrevEye[frameId] = mLastEye;
+        mEye[frameId] = osg::Matrixf::inverse(view).getTrans();
+        mLastEye = mEye[frameId];
+    }
+
+    void PostProcessor::failUpscaler(std::string reason)
+    {
+        mUpscalerFailureReason = std::move(reason);
+        mUpscalerFailurePending = true;
     }
 
     void PostProcessor::upscale(osg::State& state, size_t frameId)
     {
-        if (!upscalerActive() || !mFbos[frameId][FBO_Upscaled])
+#ifdef NM_FSR2
+        if (!upscalerActive() || mUpscalerFailurePending || !mFbos[frameId][FBO_Upscaled])
             return;
 
-        // shortcut: plain bilinear stretch until the FSR2 dispatch replaces it
         osg::GLExtensions* ext = state.get<osg::GLExtensions>();
-        mFbos[frameId][FBO_Primary]->apply(state, osg::FrameBufferObject::READ_FRAMEBUFFER);
-        mFbos[frameId][FBO_Upscaled]->apply(state, osg::FrameBufferObject::DRAW_FRAMEBUFFER);
-        ext->glBlitFramebuffer(0, 0, sceneWidth(), sceneHeight(), 0, 0, renderWidth(), renderHeight(),
-            GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        const unsigned contextId = state.getContextID();
+        const bool reverseZ = SceneUtil::AutoDepth::isReversed();
+
+        const osg::Vec4i size(sceneWidth(), sceneHeight(), renderWidth(), renderHeight());
+        if (!mUpscaler || size != mUpscalerSize)
+        {
+            if (!mUpscaler)
+                mUpscaler = std::make_unique<Fsr2Upscaler>();
+            std::string error = Fsr2Upscaler::checkSupport(contextId);
+            if (error.empty())
+                error = mUpscaler->create(state, { size[0], size[1] }, { size[2], size[3] }, reverseZ);
+            if (!error.empty())
+            {
+                failUpscaler(std::move(error));
+                return;
+            }
+            mUpscalerSize = size;
+            mUpscalerFresh = true;
+        }
+
+        auto textureId = [&](TextureIndex index) -> GLuint {
+            const osg::Texture::TextureObject* object = mTextures[frameId][index]->getTextureObject(contextId);
+            return object ? object->id() : 0;
+        };
+
+        // the output texture only gets its GL object once its framebuffer is applied
+        if (!textureId(Tex_Upscaled))
+        {
+            mFbos[frameId][FBO_Upscaled]->apply(state);
+            ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
+        }
+
+        Fsr2Upscaler::Inputs inputs;
+        inputs.mColor = textureId(Tex_Scene);
+        inputs.mDepth = textureId(Tex_Depth);
+        inputs.mDepthFormat = SceneUtil::AutoDepth::depthInternalFormat();
+        inputs.mFirstPersonDepth = textureId(Tex_FirstPersonDepth);
+        inputs.mOutput = textureId(Tex_Upscaled);
+        if (!inputs.mColor || !inputs.mDepth || !inputs.mOutput)
+            return;
+
+        inputs.mSceneSize = osg::Vec2i(size[0], size[1]);
+        inputs.mJitterPixels = getJitterPixels(frameId);
+        inputs.mInvViewProj = osg::Matrixf::inverse(getUnjitteredViewProjection(frameId));
+        inputs.mPrevViewProj = getPrevUnjitteredViewProjection(frameId);
+        inputs.mSharpness = Settings::postProcessing().mUpscaleSharpness;
+        inputs.mNear = mRendering.getNearClipDistance();
+        inputs.mFar = mRendering.getViewDistance();
+        inputs.mFovY = osg::DegreesToRadians(mRendering.getFieldOfView());
+        inputs.mReverseZ = reverseZ;
+
+        const double time = state.getFrameStamp()->getReferenceTime();
+        const double delta = time - mLastUpscaleTime;
+        mLastUpscaleTime = time;
+        inputs.mFrameTimeMs = static_cast<float>(delta * 1000.0);
+        // loading screens show up as one long frame
+        inputs.mReset = mUpscalerFresh || delta > 0.5 || SceneUtil::isCameraCut(mPrevEye[frameId], mEye[frameId]);
+        mUpscalerFresh = false;
+
+        std::string error = mUpscaler->dispatch(state, inputs);
+
+        // the first person pass only clears its depth when it draws, so a frame without arms would keep old ones
+        if (inputs.mFirstPersonDepth)
+        {
+            mFbos[frameId][FBO_FirstPerson]->apply(state);
+            glDepthMask(GL_TRUE);
+            glClearDepth(reverseZ ? 0.0 : 1.0);
+            glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+            state.haveAppliedAttribute(osg::StateAttribute::DEPTH);
+        }
         ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
+
+        if (!error.empty())
+            failUpscaler(std::move(error));
+#endif
     }
 
     int PostProcessor::renderWidth() const
