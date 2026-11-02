@@ -188,6 +188,10 @@ endif()
 
 add_subdirectory(smhasher)
 
+if (NM_FSR2)
+    add_subdirectory(fsr2-gl)
+endif()
+
 if (BUILD_BENCHMARKS AND NOT OPENMW_USE_SYSTEM_BENCHMARK)
 
     set(BENCHMARK_ENABLE_TESTING OFF)

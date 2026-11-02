@@ -92,9 +92,18 @@ jobs:
 
     - uses: seanmiddleditch/gha-setup-ninja@master
 
+    # FSR2 shader compiler from AMD's repository, pinned to v2.2.1 (see extern/fsr2-gl/VERSION.txt)
+    - name: Fetch FidelityFX shader compiler
+      run: |
+        git init ${{ github.workspace }}/deps/ffx-sc
+        git -C ${{ github.workspace }}/deps/ffx-sc remote add origin https://github.com/GPUOpen-Effects/FidelityFX-FSR2
+        git -C ${{ github.workspace }}/deps/ffx-sc fetch --depth 1 origin 1680d1edd5c034f88ebbbb793d8b88f8842cf804
+        git -C ${{ github.workspace }}/deps/ffx-sc checkout FETCH_HEAD -- tools/sc
+
     - name: Configure OpenMW
       run: >
         cmake
+        -D FFX_SC_EXECUTABLE='${{ github.workspace }}/deps/ffx-sc/tools/sc/FidelityFX_SC.exe'
         -S .
         -B ${{ github.workspace }}/build
         -G Ninja

@@ -38,6 +38,13 @@ option(BUILD_BSATOOL            "Build BSA extractor" ON)
 option(BUILD_ESMTOOL            "Build ESM inspector" ON)
 option(BUILD_NIFTEST            "Build nif file tester" ON)
 option(BUILD_DOCS               "Build documentation." OFF )
+
+# NerevarMoon: FSR2 upscaler (OpenGL port in extern/fsr2-gl), needs AMD's FidelityFX_SC.exe to build its shaders
+if (WIN32)
+    option(NM_FSR2 "Build the FSR2 upscaler" ON)
+else()
+    option(NM_FSR2 "Build the FSR2 upscaler" OFF)
+endif()
 option(BUILD_WITH_CODE_COVERAGE "Enable code coverage with gconv" OFF)
 option(BUILD_COMPONENTS_TESTS   "Build components library tests" OFF)
 option(BUILD_BENCHMARKS         "Build benchmarks with Google Benchmark" OFF)

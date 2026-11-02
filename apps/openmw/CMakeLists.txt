@@ -191,6 +191,11 @@ target_link_libraries(openmw-lib
     components
 )
 
+if (NM_FSR2)
+    target_link_libraries(openmw-lib fsr2gl)
+    target_compile_definitions(openmw-lib PUBLIC NM_FSR2=1)
+endif()
+
 if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
     target_precompile_headers(openmw-lib PRIVATE
         <boost/program_options/options_description.hpp>
