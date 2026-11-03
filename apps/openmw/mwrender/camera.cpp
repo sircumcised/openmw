@@ -434,10 +434,16 @@ namespace MWRender
 
     void Camera::rotateCameraToTrackingPtr()
     {
-        if (mMode == Mode::Static || mTrackingPtr.isEmpty())
+        if (mTrackingPtr.isEmpty())
             return;
-        setPitch(-mTrackingPtr.getRefData().getPosition().rot[0] - mDeferredRotation.x());
-        setYaw(-mTrackingPtr.getRefData().getPosition().rot[2] - mDeferredRotation.z());
+        // NerevarMoon: with head tracking the Static camera follows the body's rotation when it is applied. The Lua
+        // setYaw/setPitch from onFrame read the rotation before this frame's mouse turn and lock it (force), so the
+        // body swayed in front of the camera while turning; force overrides that stale value
+        const bool headTracked = mMode == Mode::Static && mStaticHeadOffset.has_value();
+        if (mMode == Mode::Static && !headTracked)
+            return;
+        setPitch(-mTrackingPtr.getRefData().getPosition().rot[0] - mDeferredRotation.x(), headTracked);
+        setYaw(-mTrackingPtr.getRefData().getPosition().rot[2] - mDeferredRotation.z(), headTracked);
     }
 
     void Camera::instantTransition()
