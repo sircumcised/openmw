@@ -226,6 +226,31 @@
 -- @return #boolean
 
 ---
+-- NerevarMoon: world transform of a bone of the actor's current model (the third person model unless the
+-- player is in first person view), as left by the last update traversal (one frame behind). Read only.
+-- Nodes of attached weapons and worn parts are not searched.
+-- @function [parent=#animation] getBoneTransform
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @return openmw.util#Transform world transform, or nil when the bone or the model is missing
+-- @usage local head = animation.getBoneTransform(self, 'Bip01 Head')
+-- if head then print(head:apply(util.vector3(0, 0, 0))) end
+
+---
+-- NerevarMoon: hide the player's head, hair and helmet parts from the main camera. They still cast shadows
+-- and show in water reflections. Kept when equipment or the model is rebuilt; cleared when the player
+-- switches to first person view. Applied at the end of the frame, like @{#animation.addVfx}.
+-- Can only be used on self, and only on the player (error otherwise).
+-- @function [parent=#animation] setHeadHidden
+-- @param openmw.core#GameObject actor the player (self)
+-- @param #boolean hidden
+
+---
+-- NerevarMoon engine only: true when @{#animation.getBoneTransform} and @{#animation.setHeadHidden} exist
+-- (nil in stock OpenMW).
+-- @field [parent=#animation] #boolean bodyview
+
+---
 -- NerevarMoon engine only: true when @{#animation.addVfx} accepts the `offset` option (nil in stock OpenMW).
 -- @field [parent=#animation] #boolean vfxOffset
 

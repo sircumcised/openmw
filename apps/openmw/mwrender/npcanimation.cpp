@@ -294,6 +294,8 @@ namespace MWRender
         // third person skeleton is unavailable in first person view. This is a hack to avoid cosmetic issues.
         bool viewChange = mViewMode == VM_FirstPerson || viewMode == VM_FirstPerson;
         mViewMode = viewMode;
+        if (viewMode == VM_FirstPerson)
+            mHeadHidden = false;
         MWBase::Environment::get().getWorld()->scaleObject(
             mPtr, mPtr.getCellRef().getScale(), true); // apply race height after view change
 
@@ -430,8 +432,31 @@ namespace MWRender
         mScabbard.reset();
         mHolsteredShield.reset();
         updateNpcBase();
+        if (mHeadHidden)
+            setHeadHidden(true);
 
         MWBase::Environment::get().getMechanicsManager()->forceStateUpdate(mPtr);
+    }
+
+    void NpcAnimation::setHeadHidden(bool hidden)
+    {
+        mHeadHidden = hidden;
+        applyHeadHidden(ESM::PRT_Head);
+        applyHeadHidden(ESM::PRT_Hair);
+    }
+
+    void NpcAnimation::applyHeadHidden(ESM::PartReferenceType type)
+    {
+        // Helmets and hoods take the PRT_Head and PRT_Hair slots, there is no helmet part type
+        if (type != ESM::PRT_Head && type != ESM::PRT_Hair)
+            return;
+        if (!mObjectParts[type])
+            return;
+        osg::Node* node = mObjectParts[type]->getNode();
+        if (mHeadHidden)
+            node->setNodeMask(Mask_PlayerHidden);
+        else if (node->getNumParents() > 0)
+            node->setNodeMask(node->getParent(0)->getNodeMask());
     }
 
     int NpcAnimation::getSlot(const osg::NodePath& path) const
@@ -799,6 +824,8 @@ namespace MWRender
             Log(Debug::Error) << "Error adding NPC part: " << e.what();
             return false;
         }
+        if (mHeadHidden)
+            applyHeadHidden(type);
 
         if (!mSoundsDisabled && group == MWWorld::InventoryStore::Slot_CarriedLeft)
         {

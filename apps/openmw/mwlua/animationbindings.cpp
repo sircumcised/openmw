@@ -10,7 +10,10 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwmechanics/actorutil.hpp"
 #include "../mwmechanics/character.hpp"
+
+#include "../mwrender/npcanimation.hpp"
 
 #include "context.hpp"
 #include "luamanagerimp.hpp"
@@ -246,6 +249,32 @@ namespace MWLua
         // NerevarMoon: is the node (skeleton, attached weapon or worn part) driven by the bone physics solver
         api["hasBonePhysics"] = [](const LObject& object, std::string_view bonename) -> bool {
             return getConstAnimationOrThrow(object)->hasBonePhysics(bonename);
+        };
+
+        // NerevarMoon: world transform of a bone, nil when the bone or the model is missing
+        api["getBoneTransform"]
+            = [](const LObject& object, std::string_view bonename) -> sol::optional<LuaUtil::TransformM> {
+            const MWRender::Animation* anim = MWBase::Environment::get().getWorld()->getAnimation(object.ptr());
+            if (!anim)
+                return sol::nullopt;
+            std::optional<osg::Matrixf> m = anim->getBoneWorldTransform(bonename);
+            if (!m)
+                return sol::nullopt;
+            return LuaUtil::asTransform(*m);
+        };
+
+        // NerevarMoon: player head, hair and helmet hidden from the main camera (Bodyview), marked by
+        // animation.bodyview
+        api["bodyview"] = true;
+        api["setHeadHidden"] = [context](const SelfObject& object, bool hidden) {
+            if (object.ptr() != MWMechanics::getPlayer())
+                throw std::runtime_error("setHeadHidden is only available for the player");
+            context.mLuaManager->addAction(
+                [object = Object(object), hidden] {
+                    if (auto* anim = dynamic_cast<MWRender::NpcAnimation*>(getMutableAnimationOrThrow(object)))
+                        anim->setHeadHidden(hidden);
+                },
+                "setHeadHiddenAction");
         };
 
         // NerevarMoon: addVfx accepts options.offset (util.transform), marked by animation.vfxOffset

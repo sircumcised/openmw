@@ -3173,7 +3173,7 @@ void MWShadowTechnique::cullShadowCastingScene(osgUtil::CullVisitor* cv, osg::Ca
     // record the traversal mask on entry so we can reapply it later.
     unsigned int traversalMask = cv->getTraversalMask();
 
-    cv->setTraversalMask( traversalMask & _shadowedScene->getShadowSettings()->getCastsShadowTraversalMask() );
+    cv->setTraversalMask( (traversalMask | _shadowOnlyMask) & _shadowedScene->getShadowSettings()->getCastsShadowTraversalMask() );
 
         if (camera) camera->accept(*cv);
 

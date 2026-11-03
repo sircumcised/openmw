@@ -210,4 +210,9 @@ namespace SceneUtil
             mShadowTechnique->enableShadows();
         mShadowSettings->setCastsShadowTraversalMask(mOutdoorShadowCastingMask);
     }
+
+    void ShadowManager::setShadowOnlyMask(unsigned int mask)
+    {
+        mShadowTechnique->setShadowOnlyMask(mask);
+    }
 }

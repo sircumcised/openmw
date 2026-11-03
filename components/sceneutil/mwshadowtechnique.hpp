@@ -271,6 +271,9 @@ namespace SceneUtil {
 
         void setWorldMask(unsigned int worldMask) { _worldMask = worldMask; }
 
+        // NerevarMoon: casters the viewing camera culls but the shadow pass keeps
+        void setShadowOnlyMask(unsigned int mask) { _shadowOnlyMask = mask; }
+
         osg::ref_ptr<osg::StateSet> getOrCreateShadowsBinStateSet();
 
     protected:
@@ -308,6 +311,7 @@ namespace SceneUtil {
         float                                   _shadowFadeStart = 0.0f;
 
         unsigned int                            _worldMask = ~0u;
+        unsigned int                            _shadowOnlyMask = 0;
 
         class DebugHUD final : public osg::Referenced
         {

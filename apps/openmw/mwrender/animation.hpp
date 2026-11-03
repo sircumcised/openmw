@@ -20,6 +20,7 @@
 #include <components/vfs/pathutil.hpp>
 
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -465,6 +466,9 @@ namespace MWRender
         const osg::Node* findNodeAnywhere(std::string_view name) const;
         /// NerevarMoon: is the node driven by the bone physics solver.
         bool hasBonePhysics(std::string_view bone) const;
+        /// NerevarMoon: world transform of a bone as left by the last update traversal.
+        /// Reads only node matrices, so it is safe from the Lua thread while the frame is being drawn.
+        std::optional<osg::Matrixf> getBoneWorldTransform(std::string_view bone) const;
 
         MWWorld::MovementDirectionFlags getSupportedMovementDirections(
             std::span<const std::string_view> prefixes) const;

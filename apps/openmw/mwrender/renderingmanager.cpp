@@ -174,7 +174,7 @@ namespace MWRender
         if (Settings::shadows().mActorShadows)
             shadowCastingTraversalMask |= Mask_Actor;
         if (Settings::shadows().mPlayerShadows)
-            shadowCastingTraversalMask |= Mask_Player;
+            shadowCastingTraversalMask |= Mask_Player | Mask_PlayerHidden;
 
         int indoorShadowCastingTraversalMask = shadowCastingTraversalMask;
         if (Settings::shadows().mObjectShadows)
@@ -185,6 +185,8 @@ namespace MWRender
         mShadowManager = std::make_unique<SceneUtil::ShadowManager>(sceneRoot, mRootNode, shadowCastingTraversalMask,
             indoorShadowCastingTraversalMask, Mask_Terrain | Mask_Object | Mask_Static, Settings::shadows(),
             mResourceSystem->getSceneManager()->getShaderManager());
+        // NerevarMoon: the main camera skips Mask_PlayerHidden, the shadow pass still casts it
+        mShadowManager->setShadowOnlyMask(Mask_PlayerHidden);
 
         Shader::ShaderManager::DefineMap globalDefines = Shader::getDefaultDefines();
         Shader::ShaderManager::DefineMap shadowDefines = mShadowManager->getShadowDefines(Settings::shadows());
@@ -333,7 +335,7 @@ namespace MWRender
         mViewer->getCamera()->setCullingMode(cullingMode);
         mViewer->getCamera()->setName(Constants::SceneCamera);
 
-        auto mask = ~(Mask_UpdateVisitor | Mask_SimpleWater);
+        auto mask = ~(Mask_UpdateVisitor | Mask_SimpleWater | Mask_PlayerHidden);
         MWBase::Environment::get().getWindowManager()->setCullMask(mask);
         NifOsg::Loader::setHiddenNodeMask(Mask_UpdateVisitor);
         NifOsg::Loader::setIntersectionDisabledNodeMask(Mask_Effect);

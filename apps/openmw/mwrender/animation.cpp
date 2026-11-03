@@ -1889,6 +1889,17 @@ namespace MWRender
         return visitor.mFoundNode;
     }
 
+    std::optional<osg::Matrixf> Animation::getBoneWorldTransform(std::string_view bone) const
+    {
+        const osg::Node* node = getNode(bone);
+        if (!node)
+            return std::nullopt;
+        osg::NodePathList nodepaths = node->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        return osg::computeLocalToWorld(nodepaths[0]);
+    }
+
     bool Animation::hasBonePhysics(std::string_view bone) const
     {
         const osg::Node* node = findNodeAnywhere(bone);

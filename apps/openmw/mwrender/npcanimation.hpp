@@ -80,6 +80,9 @@ namespace MWRender
         bool mAccurateAiming;
         float mAimingFactor;
 
+        bool mHeadHidden = false;
+        void applyHeadHidden(ESM::PartReferenceType type);
+
         void updateNpcBase();
 
         NpcType getNpcType() const;
@@ -157,6 +160,10 @@ namespace MWRender
         void showWeapon(bool show) override { showWeapons(show); }
 
         void setViewMode(ViewMode viewMode);
+
+        /// NerevarMoon: hide the PRT_Head and PRT_Hair parts (head, hair, helmet, hood) from the main camera,
+        /// keeping their shadow. Survives part changes and rebuilds; cleared by setViewMode(VM_FirstPerson).
+        void setHeadHidden(bool hidden);
 
         void updateParts();
 
