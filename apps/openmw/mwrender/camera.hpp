@@ -96,6 +96,10 @@ namespace MWRender
         osg::Vec3d getTrackedPosition() const { return mTrackedPosition; }
         const osg::Vec3d& getPosition() const { return mPosition; }
         void setStaticPosition(const osg::Vec3d& pos);
+        // NerevarMoon (Bodyview): in Static mode, place the camera at the tracked actor's head bone at render time
+        // plus an offset (x right, y forward along the camera yaw, z up); nullopt turns it off
+        void setStaticHeadTracking(const std::optional<osg::Vec3f>& offset) { mStaticHeadOffset = offset; }
+        bool hasStaticHeadTracking() const { return mStaticHeadOffset.has_value(); }
 
         bool isVanityOrPreviewModeEnabled() const { return mMode == Mode::Vanity || mMode == Mode::Preview; }
         Mode getMode() const { return mMode; }
@@ -146,6 +150,8 @@ namespace MWRender
         float mCameraDistance, mPreferredCameraDistance;
 
         osg::Vec3f mFirstPersonOffset{ 0, 0, 0 };
+        std::optional<osg::Vec3f> mStaticHeadOffset;
+        std::optional<osg::Vec3d> calculateStaticHeadPosition() const;
 
         osg::Vec2d mFocalPointCurrentOffset;
         osg::Vec2d mFocalPointTargetOffset;

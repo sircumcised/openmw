@@ -142,6 +142,17 @@
 -- @param openmw.util#Vector3 pos
 
 ---
+-- NerevarMoon engine only: in Static mode, put the camera at the player's `Bip01 Head` bone, read at render time,
+-- plus `offset` (x right, y forward along the camera yaw, z up). The body and its animation then never lag the
+-- camera. `nil` turns it off; while on, @{#camera.setStaticPosition} is ignored for rendering.
+-- @function [parent=#camera] setStaticHeadTracking
+-- @param openmw.util#Vector3 offset (or nil)
+
+---
+-- NerevarMoon engine only: true when @{#camera.setStaticHeadTracking} exists (nil in stock OpenMW).
+-- @field [parent=#camera] #boolean staticHeadTracking
+
+---
 -- The offset between the characters head and the camera in first person mode (3d vector).
 -- @function [parent=#camera] getFirstPersonOffset
 -- @return openmw.util#Vector3

@@ -114,7 +114,14 @@ namespace MWRender
         osg::Vec3d up = orient * osg::Vec3d(0, 0, 1);
 
         osg::Vec3d pos = mPosition;
-        if (mMode == Mode::FirstPerson)
+        if (mMode == Mode::Static && mStaticHeadOffset)
+        {
+            // NerevarMoon: same reason as the first person hack below; a Lua-set position is one frame behind the
+            // body and its animation, and the body then shakes in front of the camera by speed * frame time
+            if (std::optional<osg::Vec3d> head = calculateStaticHeadPosition())
+                pos = *head;
+        }
+        else if (mMode == Mode::FirstPerson)
         {
             // It is a hack. Camera position depends on neck animation.
             // Animations are updated in OSG cull traversal and in order to avoid 1 frame delay we
@@ -157,11 +164,35 @@ namespace MWRender
         return res;
     }
 
+    std::optional<osg::Vec3d> Camera::calculateStaticHeadPosition() const
+    {
+        if (!mAnimation || !mStaticHeadOffset)
+            return std::nullopt;
+        const osg::Node* head = mAnimation->getNode("Bip01 Head");
+        if (!head)
+            return std::nullopt;
+        osg::NodePathList nodepaths = head->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        osg::Vec3d res = osg::computeLocalToWorld(nodepaths[0]).getTrans();
+        const osg::Vec3f& off = *mStaticHeadOffset;
+        osg::Vec2f horizontalOffset = Misc::rotateVec2f(osg::Vec2f(off.x(), off.y()), mYaw);
+        res.x() += horizontalOffset.x();
+        res.y() += horizontalOffset.y();
+        res.z() += off.z();
+        return res;
+    }
+
     void Camera::updatePosition()
     {
         mTrackedPosition = calculateTrackedPosition();
         if (mMode == Mode::Static)
+        {
+            // sound listener and the rest of the frame read mPosition: give them the tracked head too
+            if (std::optional<osg::Vec3d> head = calculateStaticHeadPosition())
+                mPosition = *head;
             return;
+        }
         if (mMode == Mode::FirstPerson)
         {
             mPosition = calculateFirstPersonPosition(mTrackedPosition);
