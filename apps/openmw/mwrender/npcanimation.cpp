@@ -294,6 +294,7 @@ namespace MWRender
         // third person skeleton is unavailable in first person view. This is a hack to avoid cosmetic issues.
         bool viewChange = mViewMode == VM_FirstPerson || viewMode == VM_FirstPerson;
         mViewMode = viewMode;
+        // NerevarMoon: first person has no head parts, Bodyview's head hider ends here
         if (viewMode == VM_FirstPerson)
             mHeadHidden = false;
         MWBase::Environment::get().getWorld()->scaleObject(
@@ -432,12 +433,14 @@ namespace MWRender
         mScabbard.reset();
         mHolsteredShield.reset();
         updateNpcBase();
+        // NerevarMoon: keep the Bodyview head hider across rebuilds
         if (mHeadHidden)
             setHeadHidden(true);
 
         MWBase::Environment::get().getMechanicsManager()->forceStateUpdate(mPtr);
     }
 
+    // NerevarMoon: Bodyview head hider
     void NpcAnimation::setHeadHidden(bool hidden)
     {
         mHeadHidden = hidden;
@@ -454,9 +457,13 @@ namespace MWRender
             return;
         osg::Node* node = mObjectParts[type]->getNode();
         if (mHeadHidden)
+        {
+            if (node->getNodeMask() != Mask_PlayerHidden)
+                mHeadPartMasks[type] = node->getNodeMask();
             node->setNodeMask(Mask_PlayerHidden);
-        else if (node->getNumParents() > 0)
-            node->setNodeMask(node->getParent(0)->getNodeMask());
+        }
+        else if (node->getNodeMask() == Mask_PlayerHidden)
+            node->setNodeMask(mHeadPartMasks[type]);
     }
 
     int NpcAnimation::getSlot(const osg::NodePath& path) const
@@ -824,6 +831,7 @@ namespace MWRender
             Log(Debug::Error) << "Error adding NPC part: " << e.what();
             return false;
         }
+        // NerevarMoon: a new head or hair part stays hidden while Bodyview hides the head
         if (mHeadHidden)
             applyHeadHidden(type);
 

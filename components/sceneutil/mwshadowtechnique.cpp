@@ -3173,6 +3173,7 @@ void MWShadowTechnique::cullShadowCastingScene(osgUtil::CullVisitor* cv, osg::Ca
     // record the traversal mask on entry so we can reapply it later.
     unsigned int traversalMask = cv->getTraversalMask();
 
+    // NerevarMoon: _shadowOnlyMask casts even when the viewing camera culls it
     cv->setTraversalMask( (traversalMask | _shadowOnlyMask) & _shadowedScene->getShadowSettings()->getCastsShadowTraversalMask() );
 
         if (camera) camera->accept(*cv);

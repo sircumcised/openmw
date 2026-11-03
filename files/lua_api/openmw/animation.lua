@@ -227,7 +227,8 @@
 
 ---
 -- NerevarMoon: world transform of a bone of the actor's current model (the third person model unless the
--- player is in first person view), as left by the last update traversal (one frame behind). Read only.
+-- player is in first person view). Read only. It is the pose drawn this frame, so a camera placed from it
+-- lands one frame later. The matrix includes the actor's scale: a bone-local offset scales with race height.
 -- Nodes of attached weapons and worn parts are not searched.
 -- @function [parent=#animation] getBoneTransform
 -- @param openmw.core#GameObject actor
@@ -238,8 +239,10 @@
 
 ---
 -- NerevarMoon: hide the player's head, hair and helmet parts from the main camera. They still cast shadows
--- and show in water reflections. Kept when equipment or the model is rebuilt; cleared when the player
--- switches to first person view. Applied at the end of the frame, like @{#animation.addVfx}.
+-- and show in water reflections. Kept when equipment changes or the model is rebuilt; cleared when the player
+-- switches to first person view. A new player model (game load, new game, race, sex, head or hair change in
+-- character generation) starts with the head shown, so call it again then.
+-- Applied at the start of the next frame, like @{#animation.addVfx}.
 -- Can only be used on self, and only on the player (error otherwise).
 -- @function [parent=#animation] setHeadHidden
 -- @param openmw.core#GameObject actor the player (self)

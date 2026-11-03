@@ -80,7 +80,9 @@ namespace MWRender
         bool mAccurateAiming;
         float mAimingFactor;
 
+        // NerevarMoon: Bodyview head hider, with the masks the hidden parts had before
         bool mHeadHidden = false;
+        std::array<osg::Node::NodeMask, ESM::PRT_Count> mHeadPartMasks{};
         void applyHeadHidden(ESM::PartReferenceType type);
 
         void updateNpcBase();

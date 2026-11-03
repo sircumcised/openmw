@@ -392,7 +392,7 @@ namespace MWRender
             if (reflectionDetail >= 3)
                 extraMask |= Mask_Effect | Mask_ParticleSystem | Mask_Object;
             if (reflectionDetail >= 4)
-                extraMask |= Mask_Player | Mask_PlayerHidden | Mask_Actor;
+                extraMask |= Mask_Player | Mask_PlayerHidden | Mask_Actor; // NerevarMoon: Bodyview head in reflections
             if (reflectionDetail >= 5)
                 extraMask |= Mask_Groundcover;
             return Mask_Scene | Mask_Sky | Mask_Lighting | extraMask;

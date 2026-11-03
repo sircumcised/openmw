@@ -1889,6 +1889,7 @@ namespace MWRender
         return visitor.mFoundNode;
     }
 
+    // NerevarMoon: read-only bone transform for Lua (animation.getBoneTransform)
     std::optional<osg::Matrixf> Animation::getBoneWorldTransform(std::string_view bone) const
     {
         const osg::Node* node = getNode(bone);

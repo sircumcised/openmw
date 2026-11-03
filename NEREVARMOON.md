@@ -9,12 +9,14 @@ additive: a stock OpenMW mod keeps working, a mod that uses these additions need
 - `animation.hasBonePhysics(actor, bone)`: is the node driven by the bone physics solver
   (`<model>.physics.yaml` chains, e.g. flail chains).
 - `animation.getBoneTransform(actor, bone) -> util.transform | nil`: world transform of a bone of the
-  actor's current model, from the last update (one frame behind). Read only; nil if the bone or the
-  model is missing.
+  actor's current model. It is the pose drawn this frame, so a camera placed from it lands one frame later.
+  The matrix includes the actor's scale (a bone-local offset scales with race height). Read only; nil if
+  the bone or the model is missing.
 - `animation.setHeadHidden(self, hidden)`: player only (error otherwise). Hides the head, hair and helmet
   parts from the main camera; they keep casting shadows and show in water reflections. Kept across
-  equipment changes and rebuilds, cleared when the player switches to first person view. Marker
-  `animation.bodyview`.
+  equipment changes and rebuilds, cleared when the player switches to first person view. A new player
+  model (game load, new game, chargen race/sex/head/hair change) starts with the head shown, so Lua calls
+  it again. Applied at the start of the next frame. Marker `animation.bodyview`.
 
 ## Engine changes for Bodyview (all marked `NerevarMoon` in the code)
 - `mwrender/vismask.hpp`: `Mask_PlayerHidden = (1 << 21)`.
