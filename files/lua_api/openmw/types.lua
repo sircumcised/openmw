@@ -61,6 +61,14 @@
 -- @return #boolean
 
 ---
+-- NerevarMoon: is the actor's body a Jolt ragdoll: dead, or knocked down and not yet getting up. With the
+-- ragdoll on, a bipedal actor knocked down falls as a ragdoll, rolls onto its back and gets up through the
+-- tail of its knockdown animation.
+-- @function [parent=#Actor] isRagdoll
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
 -- NerevarMoon: knock the actor down, as a strong hit does. Applied at the start of the next frame; no effect on a
 -- dead actor or on one already down. The knockdown animation decides how long it stays down.
 -- @function [parent=#Actor] knockDown

@@ -289,7 +289,9 @@ namespace MWLua
         api["physicsImpulse"]
             = [context](const GObject& actor, const osg::Vec3f& impulse, sol::optional<std::string> bone) -> bool {
             const MWWorld::Ptr& ptr = actor.ptr();
-            if (!ptr.getClass().isActor() || !ptr.getClass().getCreatureStats(ptr).isDead())
+            if (!ptr.getClass().isActor()
+                || !(ptr.getClass().getCreatureStats(ptr).isDead()
+                    || MWBase::Environment::get().getWorld()->isKnockdownRagdoll(ptr)))
                 return false;
             context.mLuaManager->addAction(
                 [actor, impulse, name = bone.value_or(std::string())] {

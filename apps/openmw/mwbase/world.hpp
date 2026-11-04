@@ -309,6 +309,11 @@ namespace MWBase
         virtual bool ragdollImpulse(const MWWorld::Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) = 0;
         /// NerevarMoon: the actor is no ragdoll any more (resurrection); its saved pose is forgotten.
         virtual void stopRagdoll(const MWWorld::Ptr& actor) = 0;
+        /// NerevarMoon: a knocked down (`knockout`: knocked out) actor falls as a ragdoll, then gets up through the
+        /// knockdown animation. True when it started or the actor is already down as a ragdoll.
+        virtual bool startKnockdownRagdoll(const MWWorld::Ptr& actor, bool knockout) = 0;
+        /// NerevarMoon: the actor is down as a knockdown ragdoll, or getting up from it.
+        virtual bool isKnockdownRagdoll(const MWWorld::Ptr& actor) const = 0;
 
         virtual MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos)

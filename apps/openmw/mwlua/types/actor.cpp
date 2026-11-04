@@ -532,6 +532,11 @@ namespace MWLua
             return stats.getKnockedDown()
                 && (stats.getFatigue().getCurrent() < 0 || stats.getFatigue().getBase() == 0);
         };
+        // NerevarMoon: the body is a ragdoll (dead, or knocked down and not yet getting up)
+        actor["isRagdoll"] = [](const Object& o) {
+            const MWWorld::Ptr& ptr = o.ptr();
+            return ptr.getClass().isActor() && MWBase::Environment::get().getWorld()->isRagdoll(ptr);
+        };
         actor["knockDown"] = [context](const Object& o) {
             context.mLuaManager->addAction(
                 [obj = Object(o)] {

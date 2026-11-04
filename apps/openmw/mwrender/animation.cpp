@@ -1960,6 +1960,7 @@ namespace MWRender
             mStates.clear();
             mAccumCtrl = nullptr;
             mRagdoll = true;
+            mGetupBlends.clear(); // their nodes get the ragdoll callback in place of every callback
         }
         osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
         callback->setLocal(node->second->getMatrix());

@@ -412,6 +412,9 @@ namespace MWMechanics
 
         if (mHitState != CharState_None)
         {
+            // NerevarMoon: down as a ragdoll or getting up from it; World ends it
+            if (world->isKnockdownRagdoll(mPtr))
+                return;
             if (!mAnimation->isPlaying(mCurrentHit))
             {
                 if (isKnockedOut() && mCurrentHit.empty() && knockout)
@@ -489,6 +492,11 @@ namespace MWMechanics
             mCurrentHit.clear();
             return;
         }
+
+        // NerevarMoon: the body falls as a ragdoll and gets up through the knockdown group (World)
+        if ((isKnockedOut() || isKnockedDown()) && mAnimation->hasAnimation("knockdown")
+            && world->startKnockdownRagdoll(mPtr, isKnockedOut()))
+            return;
 
         playBlendedAnimation(mCurrentHit, priority, MWRender::BlendMask_All, true, 1, startKey, stopKey, 0.0f,
             std::numeric_limits<uint32_t>::max());

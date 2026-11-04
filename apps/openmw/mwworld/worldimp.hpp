@@ -116,6 +116,29 @@ namespace MWWorld
         void applyRagdollStates(float duration);
         bool applyRagdollState(const Ptr& actor, const ESM::RagdollState& state);
 
+        // NerevarMoon: knockdown ragdolls; not saved (a reload shows the engine's knockdown of today)
+        struct Knockdown
+        {
+            enum class Phase
+            {
+                Falling,
+                Rolling,
+                Resting,
+                GettingUp,
+            };
+            Phase mPhase = Phase::Falling;
+            bool mKnockout = false;
+            float mTime = 0.f; // seconds in this phase
+            bool mAsleep = false; // from the last pose
+            bool mRolling = false;
+            bool mFrozen = false; // the Jolt bodies are gone (cap of 8 or knockout rest)
+            std::vector<std::pair<std::string, osg::Matrixf>> mWorld; // last pose, world space
+        };
+        std::map<ESM::RefNum, Knockdown> mKnockdowns;
+        void updateKnockdowns(float duration);
+        void endKnockdownFall(const Ptr& actor, Knockdown& knockdown);
+        void beginGetup(const Ptr& actor, Knockdown& knockdown);
+
         bool mSky;
         bool mGodMode;
         bool mScriptsEnabled;
@@ -391,6 +414,8 @@ namespace MWWorld
         bool isRagdollFalling(const Ptr& actor) const override;
         bool ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) override;
         void stopRagdoll(const Ptr& actor) override;
+        bool startKnockdownRagdoll(const Ptr& actor, bool knockout) override;
+        bool isKnockdownRagdoll(const Ptr& actor) const override;
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;
