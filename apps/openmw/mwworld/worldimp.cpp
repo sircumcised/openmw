@@ -1413,16 +1413,27 @@ namespace MWWorld
                 MWRender::Animation* animation = ptr.isEmpty() ? nullptr : getAnimation(ptr);
                 if (animation == nullptr || !ptr.isInCell() || !ptr.getRefData().isEnabled())
                     continue;
-                animation->setRagdollWorldPose(pose.mWorld);
                 ptr = moveObject(ptr, pose.mLowest);
-
-                // Keep the pose for saves and for the next visit of the cell
+                // Moving may have put the actor out of the active cells: its animation is gone then
+                animation = getAnimation(ptr);
+                osg::Node* base = ptr.getRefData().getBaseNode();
+                if (animation == nullptr || base == nullptr || base->getParentalNodePaths().empty())
+                    continue;
+                const osg::Matrixf toBase = osg::Matrixf::inverse(osg::computeLocalToWorld(base->getParentalNodePaths()[0]));
+                std::vector<std::pair<std::string, osg::Matrixf>> relative;
                 ESM::RagdollState state;
                 state.mActor = ptr.getCellRef().getRefNum();
-                osg::Vec3f pelvis;
-                for (const auto& [bone, rotation] : animation->getRagdollLocalPose(pelvis))
-                    state.mBones.emplace_back(bone, ESM::Quaternion(rotation));
-                state.mPelvisPosition = ESM::Vector3(pelvis);
+                for (const auto& [bone, world] : pose.mWorld)
+                {
+                    const osg::Matrixf m = world * toBase;
+                    relative.emplace_back(bone, m);
+                    osg::Vec3f translation, scale;
+                    osg::Quat rotation, scaleOrientation;
+                    m.decompose(translation, rotation, scale, scaleOrientation);
+                    state.mBones.push_back(ESM::RagdollState::Bone{ bone, rotation, translation });
+                }
+                animation->setRagdollPose(relative);
+                // Keep the pose for saves and for the next visit of the cell
                 if (state.mActor.isSet())
                     mRagdollStates[state.mActor] = std::move(state);
                 if (pose.mFallSpeed)
@@ -1459,21 +1470,29 @@ namespace MWWorld
                 it = mRagdollStates.erase(it); // resurrected
                 continue;
             }
-            MWRender::Animation* animation = getAnimation(ptr);
-            if (animation != nullptr && !animation->isRagdoll())
-            {
-                std::vector<std::pair<std::string, osg::Quat>> bones;
-                for (const auto& [bone, rotation] : it->second.mBones)
-                    bones.emplace_back(bone, osg::Quat(rotation));
-                // Bones missing from this skeleton are skipped; no pelvis: the death animation stays
-                bool hasPelvis = false;
-                for (const auto& [bone, rotation] : bones)
-                    hasPelvis |= Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis");
-                if (hasPelvis)
-                    animation->setRagdollLocalPose(bones, osg::Vec3f(it->second.mPelvisPosition));
-            }
+            applyRagdollState(ptr, it->second);
             ++it;
         }
+    }
+
+    bool World::applyRagdollState(const Ptr& actor, const ESM::RagdollState& state)
+    {
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr || animation->isRagdoll())
+            return false;
+        // Bones missing from this skeleton are skipped; no pelvis: the death animation stays
+        std::vector<std::pair<std::string, osg::Matrixf>> relative;
+        bool hasPelvis = false;
+        for (const ESM::RagdollState::Bone& bone : state.mBones)
+        {
+            relative.emplace_back(bone.mName,
+                osg::Matrixf::rotate(osg::Quat(bone.mRotation)) * osg::Matrixf::translate(osg::Vec3f(bone.mPosition)));
+            hasPelvis |= Misc::StringUtils::ciEqual(bone.mName, "Bip01 Pelvis");
+        }
+        if (!hasPelvis)
+            return false;
+        animation->setRagdollPose(relative);
+        return true;
     }
 
     bool World::startRagdoll(const Ptr& actor)
@@ -1485,6 +1504,15 @@ namespace MWWorld
         MWRender::Animation* animation = getAnimation(actor);
         if (animation == nullptr)
             return false;
+        // A corpse that already fell (save made during the fall, cell visited again): its pose, no new fall
+        if (auto saved = mRagdollStates.find(actor.getCellRef().getRefNum()); saved != mRagdollStates.end())
+        {
+            if (animation->isRagdoll() || applyRagdollState(actor, saved->second))
+            {
+                enableActorCollision(actor, false);
+                return true;
+            }
+        }
         const std::vector<MWPhysics::RagdollBone> bones = animation->getRagdollBones();
 
         // The blow: from the last attacker towards the victim, harder for a charged attack
@@ -1505,10 +1533,20 @@ namespace MWWorld
         const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
         if (!jolt->addRagdoll(actor, bones, 1.f / 60.f, impulse, mass))
             return false;
+        enableActorCollision(actor, false); // no standing Bullet capsule over the falling body
 
         // The first step of this frame poses the skeleton and stops the animation (World::doPhysics)
         Log(Debug::Info) << "[ragdoll] start " << actor.getCellRef().getRefId() << " bones=" << bones.size();
         return true;
+    }
+
+    void World::stopRagdoll(const Ptr& actor)
+    {
+        if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+            jolt->dropRagdoll(actor);
+        mRagdollStates.erase(actor.getCellRef().getRefNum());
+        if (MWRender::Animation* animation = getAnimation(actor))
+            animation->clearRagdoll();
     }
 
     bool World::isRagdoll(const Ptr& actor)

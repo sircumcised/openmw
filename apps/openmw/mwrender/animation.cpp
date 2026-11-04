@@ -1553,6 +1553,9 @@ namespace MWRender
 
     void Animation::setObjectRoot(const std::string& model, bool forceskeleton, bool baseonly, bool isCreature)
     {
+        // A new skeleton: the old ragdoll callbacks belong to the old nodes (the next ragdoll pose re-creates them)
+        mRagdollBones.clear();
+        mRagdoll = false;
         osg::ref_ptr<osg::StateSet> previousStateset;
         if (mObjectRoot)
         {
@@ -1963,48 +1966,25 @@ namespace MWRender
         return callback.get();
     }
 
-    void Animation::setRagdollWorldPose(const std::vector<std::pair<std::string, osg::Matrixf>>& world)
+    void Animation::setRagdollPose(const std::vector<std::pair<std::string, osg::Matrixf>>& relativeToBase)
     {
-        for (const auto& [bone, matrix] : world)
+        for (const auto& [bone, matrix] : relativeToBase)
             if (RagdollBoneCallback* callback = ragdollCallback(bone))
-                callback->setWorld(matrix);
+                callback->setRelative(matrix, mInsert.get());
     }
 
-    void Animation::setRagdollLocalPose(
-        const std::vector<std::pair<std::string, osg::Quat>>& local, const osg::Vec3f& pelvisLocalPos)
+    void Animation::clearRagdoll()
     {
-        for (const auto& [bone, rotation] : local)
-        {
-            auto node = getNodeMap().find(bone);
-            if (node == getNodeMap().end())
-                continue;
-            osg::Vec3f translation, scale;
-            osg::Quat oldRotation, scaleOrientation;
-            node->second->getMatrix().decompose(translation, oldRotation, scale, scaleOrientation);
-            if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
-                translation = pelvisLocalPos;
-            if (RagdollBoneCallback* callback = ragdollCallback(bone))
-                callback->setLocal(osg::Matrixf::scale(scale) * osg::Matrixf::rotate(rotation)
-                    * osg::Matrixf::translate(translation));
-        }
-    }
-
-    std::vector<std::pair<std::string, osg::Quat>> Animation::getRagdollLocalPose(osg::Vec3f& pelvisLocalPos) const
-    {
-        std::vector<std::pair<std::string, osg::Quat>> pose;
+        if (!mRagdoll)
+            return;
         for (const auto& [bone, callback] : mRagdollBones)
         {
             auto node = getNodeMap().find(bone);
-            if (node == getNodeMap().end())
-                continue;
-            osg::Vec3f translation, scale;
-            osg::Quat rotation, scaleOrientation;
-            node->second->getMatrix().decompose(translation, rotation, scale, scaleOrientation);
-            if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
-                pelvisLocalPos = translation;
-            pose.emplace_back(bone, rotation);
+            if (node != getNodeMap().end() && node->second->getUpdateCallback() == callback.get())
+                node->second->setUpdateCallback(nullptr);
         }
-        return pose;
+        mRagdollBones.clear();
+        mRagdoll = false;
     }
 
     bool Animation::hasBonePhysics(std::string_view bone) const

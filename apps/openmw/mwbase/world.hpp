@@ -307,6 +307,8 @@ namespace MWBase
         /// NerevarMoon: pushes a ragdoll's bone (`bone` empty: chest) by `impulse` (units/s); a frozen ragdoll
         /// falls again. False for anything else.
         virtual bool ragdollImpulse(const MWWorld::Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) = 0;
+        /// NerevarMoon: the actor is no ragdoll any more (resurrection); its saved pose is forgotten.
+        virtual void stopRagdoll(const MWWorld::Ptr& actor) = 0;
 
         virtual MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos)

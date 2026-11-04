@@ -437,10 +437,15 @@ namespace MWPhysics
         return std::exchange(mImpl->mPoses, {});
     }
 
-    void JoltWorld::remove(const MWWorld::Ptr& ptr)
+    void JoltWorld::dropRagdoll(const MWWorld::Ptr& ptr)
     {
         mImpl->freezeRagdoll(ptr.mRef, false);
         std::erase_if(mImpl->mPoses, [&](const RagdollPose& pose) { return pose.mPtr.mRef == ptr.mRef; });
+    }
+
+    void JoltWorld::remove(const MWWorld::Ptr& ptr)
+    {
+        dropRagdoll(ptr);
         mImpl->removeStatic(ptr.mRef);
         mImpl->removeDynamic(ptr.mRef);
     }

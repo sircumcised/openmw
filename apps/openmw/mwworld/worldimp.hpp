@@ -114,6 +114,7 @@ namespace MWWorld
         std::map<ESM::RefNum, ESM::RagdollState> mRagdollStates;
         float mRagdollApplyTimer = 0.f;
         void applyRagdollStates(float duration);
+        bool applyRagdollState(const Ptr& actor, const ESM::RagdollState& state);
 
         bool mSky;
         bool mGodMode;
@@ -389,6 +390,7 @@ namespace MWWorld
         bool isRagdoll(const Ptr& actor) override;
         bool isRagdollFalling(const Ptr& actor) const override;
         bool ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) override;
+        void stopRagdoll(const Ptr& actor) override;
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;

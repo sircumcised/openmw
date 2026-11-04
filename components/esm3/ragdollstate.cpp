@@ -8,25 +8,24 @@ namespace ESM
     void RagdollState::load(ESMReader& esm)
     {
         mActor = esm.getFormId(true, "ACTR");
-        esm.getHNT("PELV", mPelvisPosition.mValues);
         mBones.clear();
         while (esm.isNextSub("BONE"))
         {
-            std::string name = esm.getHString();
-            Quaternion rotation;
-            esm.getHNT("ROTA", rotation.mValues);
-            mBones.emplace_back(std::move(name), rotation);
+            Bone& bone = mBones.emplace_back();
+            bone.mName = esm.getHString();
+            esm.getHNT("ROTA", bone.mRotation.mValues);
+            esm.getHNT("POSI", bone.mPosition.mValues);
         }
     }
 
     void RagdollState::save(ESMWriter& esm) const
     {
         esm.writeFormId(mActor, true, "ACTR");
-        esm.writeHNT("PELV", mPelvisPosition);
-        for (const auto& [name, rotation] : mBones)
+        for (const Bone& bone : mBones)
         {
-            esm.writeHNString("BONE", name);
-            esm.writeHNT("ROTA", rotation);
+            esm.writeHNString("BONE", bone.mName);
+            esm.writeHNT("ROTA", bone.mRotation);
+            esm.writeHNT("POSI", bone.mPosition);
         }
     }
 }

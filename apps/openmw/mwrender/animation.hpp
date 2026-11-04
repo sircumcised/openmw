@@ -487,13 +487,11 @@ namespace MWRender
         /// NerevarMoon ragdoll. The Bip01 bones a ragdoll can use, with their world transforms now (mWorldPrev is
         /// the same: the bones' own motion is not tracked). Empty without a skeleton.
         std::vector<MWPhysics::RagdollBone> getRagdollBones() const;
-        /// Puts the listed bones at these world transforms from now on and stops every animation of this actor.
-        void setRagdollWorldPose(const std::vector<std::pair<std::string, osg::Matrixf>>& world);
-        /// Same with local rotations (from a save); the pelvis also gets its local position back.
-        void setRagdollLocalPose(
-            const std::vector<std::pair<std::string, osg::Quat>>& local, const osg::Vec3f& pelvisLocalPos);
-        /// Local rotations of the ragdoll bones as they are now, and the pelvis' local position.
-        std::vector<std::pair<std::string, osg::Quat>> getRagdollLocalPose(osg::Vec3f& pelvisLocalPos) const;
+        /// Puts the listed bones at these transforms relative to the actor's base node from now on, and stops every
+        /// animation of this actor.
+        void setRagdollPose(const std::vector<std::pair<std::string, osg::Matrixf>>& relativeToBase);
+        /// Back to normal animation (resurrection, new skeleton).
+        void clearRagdoll();
         bool isRagdoll() const { return mRagdoll; }
         void setPlayScriptedOnly(bool playScriptedOnly) { mPlayScriptedOnly = playScriptedOnly; }
 

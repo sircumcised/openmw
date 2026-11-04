@@ -86,6 +86,8 @@ namespace MWPhysics
         bool isRagdollActive(const MWWorld::Ptr& ptr) const;
         /// Stops the fall now; the final pose comes out of takeRagdollPoses().
         void freezeRagdoll(const MWWorld::Ptr& ptr);
+        /// Removes the ragdoll without a final pose and forgets its pending poses.
+        void dropRagdoll(const MWWorld::Ptr& ptr);
         /// Poses produced since the last call (each step, plus freezes).
         std::vector<RagdollPose> takeRagdollPoses();
 

@@ -133,6 +133,8 @@ namespace MWPhysics
         }
 
         const float size = (pos[3] - pos[0]).Length() / 0.86f;
+        if (!(size > 0.1f))
+            return build; // collapsed skeleton: capsules would have no size
         const JPH::Vec3 up = safeNormal(pos[3] - pos[0], JPH::Vec3::sAxisZ());
         const JPH::Vec3 right = perpendicular(up, safeNormal(pos[13] - pos[10], JPH::Vec3::sAxisX()));
         const JPH::Vec3 forward = up.Cross(right).Normalized();
