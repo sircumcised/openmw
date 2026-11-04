@@ -22,6 +22,7 @@ on:
       - nm-bodyview
       - nm-jolt
       - nm-lua
+      - nm-bodyview-aim
 
 jobs:
   Windows:

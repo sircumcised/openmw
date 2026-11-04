@@ -28,6 +28,8 @@ additive: a stock OpenMW mod keeps working, a mod that uses these additions need
 - `mwrender/npcanimation.*`: `setHeadHidden`, re-applied in `addOrReplaceIndividualPart` and `rebuild`.
 - `mwrender/animation.*`: `getBoneWorldTransform`.
 - `mwlua/animationbindings.cpp`, `files/lua_api/openmw/animation.lua`: the bindings.
+- `mwmechanics/character.cpp`: with the Static camera and head tracking on, the player's spine pitch factor
+  is 1 for every weapon state (stock: ranged attacks only), so arms and weapon follow the look pitch.
 
 ## Jolt Physics (branch nm-jolt, sub-project 1 of the ragdoll work)
 
