@@ -226,12 +226,14 @@ namespace MWPhysics
             return pose;
         }
 
-        void freezeRagdoll(Key key)
+        // `report`: queue the final pose; false when the object is going away (its Ptr must not be used later)
+        void freezeRagdoll(Key key, bool report = true)
         {
             auto found = mRagdolls.find(key);
             if (found == mRagdolls.end())
                 return;
-            mPoses.push_back(poseOf(found->second, true));
+            if (report)
+                mPoses.push_back(poseOf(found->second, true));
             found->second.mRagdoll->RemoveFromPhysicsSystem();
             mRagdolls.erase(found);
         }
@@ -437,7 +439,8 @@ namespace MWPhysics
 
     void JoltWorld::remove(const MWWorld::Ptr& ptr)
     {
-        mImpl->freezeRagdoll(ptr.mRef);
+        mImpl->freezeRagdoll(ptr.mRef, false);
+        std::erase_if(mImpl->mPoses, [&](const RagdollPose& pose) { return pose.mPtr.mRef == ptr.mRef; });
         mImpl->removeStatic(ptr.mRef);
         mImpl->removeDynamic(ptr.mRef);
     }

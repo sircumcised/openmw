@@ -377,6 +377,10 @@ namespace MWWorld
 
         bool physicsAvailable() const override;
         bool setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity) override;
+        bool startRagdoll(const Ptr& actor) override;
+        bool isRagdoll(const Ptr& actor) override;
+        bool isRagdollFalling(const Ptr& actor) const override;
+        bool ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) override;
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;

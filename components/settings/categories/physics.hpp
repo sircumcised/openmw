@@ -23,6 +23,8 @@ namespace Settings
             makeMaxSanitizerInt(-1) };
         // NerevarMoon: Jolt Physics for dynamic bodies (ragdolls); false leaves Bullet alone as in stock OpenMW
         SettingValue<bool> mJolt{ mIndex, "Physics", "jolt" };
+        // NerevarMoon: bipedal actors fall as Jolt ragdolls on death (needs jolt = true)
+        SettingValue<bool> mRagdoll{ mIndex, "Physics", "ragdoll" };
     };
 }
 

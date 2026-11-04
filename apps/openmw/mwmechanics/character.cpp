@@ -895,6 +895,13 @@ namespace MWMechanics
         if (!mAnimation || isScriptedAnimPlaying())
             return;
 
+        // NerevarMoon: bipeds fall as ragdolls; the death state stays set, no death animation plays
+        if (mDeathState != CharState_SwimDeath && MWBase::Environment::get().getWorld()->startRagdoll(mPtr))
+        {
+            mCurrentDeath.clear();
+            return;
+        }
+
         playDeath(startpoint, mDeathState);
     }
 
@@ -2786,7 +2793,7 @@ namespace MWMechanics
         }
 
         MWMechanics::CreatureStats& cStats = mPtr.getClass().getCreatureStats(mPtr);
-        if (isAnimPlaying(mCurrentDeath))
+        if (isAnimPlaying(mCurrentDeath) || MWBase::Environment::get().getWorld()->isRagdollFalling(mPtr))
             return Result_DeathAnimPlaying;
         if (!cStats.isDeathAnimationFinished())
         {
