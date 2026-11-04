@@ -93,4 +93,31 @@ namespace
         ASSERT_EQ(lines.size(), 2u);
         EXPECT_NE(lines[1].find("|callback|"), std::string::npos);
     }
+
+    TEST_F(LuaTimingTest, LabelIgnoredWhenDisabledAtConstruction)
+    {
+        {
+            ScopedLuaTimingLabel label("onFoo");
+            LuaTiming::sEnabled = true;
+            {
+                ScopedLuaTiming a(1);
+            }
+            LuaTiming::sEnabled = false;
+        }
+        auto lines = LuaTiming::formatAndReset(name);
+        ASSERT_EQ(lines.size(), 2u);
+        EXPECT_NE(lines[1].find("|callback|"), std::string::npos);
+    }
+
+    TEST_F(LuaTimingTest, OwnedLabel)
+    {
+        LuaTiming::sEnabled = true;
+        {
+            ScopedLuaTimingLabel label(std::string("event:") + "Hit");
+            ScopedLuaTiming a(1);
+        }
+        auto lines = LuaTiming::formatAndReset(name);
+        ASSERT_EQ(lines.size(), 2u);
+        EXPECT_NE(lines[1].find("|event:Hit|"), std::string::npos);
+    }
 }

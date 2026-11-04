@@ -19,7 +19,7 @@ namespace LuaUtil
         std::map<std::pair<int, std::string>, Entry, std::less<>> sEntries;
         unsigned sFrames = 0;
         int sDepth = 0;
-        std::string sLabel = "callback";
+        std::string_view sLabel = "callback";
     }
 
     void LuaTiming::add(int scriptIndex, std::string_view label, double seconds)
@@ -88,12 +88,25 @@ namespace LuaUtil
     }
 
     ScopedLuaTimingLabel::ScopedLuaTimingLabel(std::string_view label)
-        : mPrevious(std::exchange(sLabel, std::string(label)))
     {
+        if (!LuaTiming::sEnabled)
+            return;
+        mActive = true;
+        mPrevious = std::exchange(sLabel, label);
+    }
+
+    ScopedLuaTimingLabel::ScopedLuaTimingLabel(std::string&& label)
+    {
+        if (!LuaTiming::sEnabled)
+            return;
+        mActive = true;
+        mOwned = std::move(label);
+        mPrevious = std::exchange(sLabel, std::string_view(mOwned));
     }
 
     ScopedLuaTimingLabel::~ScopedLuaTimingLabel()
     {
-        sLabel = std::move(mPrevious);
+        if (mActive)
+            sLabel = mPrevious;
     }
 }

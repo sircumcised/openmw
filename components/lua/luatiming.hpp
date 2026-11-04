@@ -40,16 +40,25 @@ namespace LuaUtil
     };
 
     // Sets the label used by ScopedLuaTiming (default "callback") and restores the previous one.
+    // Does nothing when the log is off at construction. The string_view overload expects a string that outlives
+    // the scope (engine handler names are literals); the std::string overload keeps its own copy.
     class ScopedLuaTimingLabel
     {
     public:
         explicit ScopedLuaTimingLabel(std::string_view label);
+        explicit ScopedLuaTimingLabel(std::string&& label);
+        explicit ScopedLuaTimingLabel(const char* label)
+            : ScopedLuaTimingLabel(std::string_view(label))
+        {
+        }
         ~ScopedLuaTimingLabel();
         ScopedLuaTimingLabel(const ScopedLuaTimingLabel&) = delete;
         ScopedLuaTimingLabel& operator=(const ScopedLuaTimingLabel&) = delete;
 
     private:
-        std::string mPrevious;
+        bool mActive = false;
+        std::string mOwned;
+        std::string_view mPrevious;
     };
 }
 

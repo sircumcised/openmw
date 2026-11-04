@@ -98,6 +98,9 @@ namespace MWLua
     void LuaManager::initConfiguration(bool reload)
     {
         mConfiguration.init(MWBase::Environment::get().getESMStore()->getLuaScriptsCfg(), reload);
+        // NerevarMoon: lua timing log rows are keyed by script index, which a reload can change.
+        LuaUtil::LuaTiming::reset();
+        mTimingFrames = 0;
         Log(Debug::Verbose) << "Lua scripts configuration (" << mConfiguration.size() << " scripts):";
         for (size_t i = 0; i < mConfiguration.size(); ++i)
             Log(Debug::Verbose) << "#" << i << " " << LuaUtil::scriptCfgToString(mConfiguration[i]);
@@ -448,6 +451,9 @@ namespace MWLua
         mObjectLists.objectAddedToScene(ptr);
         mObjectLists.setPlayer(ptr);
         mPlayer = ptr;
+        // NerevarMoon: drop menu-time [gc] and onFrame entries so the first block counts in-game frames only.
+        LuaUtil::LuaTiming::reset();
+        mTimingFrames = 0;
         LocalScripts* localScripts = ptr.getRefData().getLuaScripts();
         if (!localScripts)
         {
