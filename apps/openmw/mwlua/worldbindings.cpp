@@ -26,6 +26,7 @@
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
+#include "../mwmechanics/creaturestats.hpp"
 #include "../mwworld/action.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/datetimemanager.hpp"
@@ -279,6 +280,23 @@ namespace MWLua
                         Log(Debug::Warning) << "physicsSetDynamic: " << ptr.toString() << " cannot be simulated";
                 },
                 "physicsSetDynamic");
+        };
+        // NerevarMoon: ragdolls
+        api["isRagdoll"] = [](const GObject& actor) -> bool {
+            const MWWorld::Ptr& ptr = actor.ptr();
+            return ptr.getClass().isActor() && MWBase::Environment::get().getWorld()->isRagdoll(ptr);
+        };
+        api["physicsImpulse"]
+            = [context](const GObject& actor, const osg::Vec3f& impulse, sol::optional<std::string> bone) -> bool {
+            const MWWorld::Ptr& ptr = actor.ptr();
+            if (!ptr.getClass().isActor() || !ptr.getClass().getCreatureStats(ptr).isDead())
+                return false;
+            context.mLuaManager->addAction(
+                [actor, impulse, name = bone.value_or(std::string())] {
+                    MWBase::Environment::get().getWorld()->ragdollImpulse(actor.ptr(), impulse, name);
+                },
+                "physicsImpulse");
+            return true;
         };
         api["_runStandardUseAction"] = [context](const GObject& object, const GObject& actor, bool force) {
             context.mLuaManager->addAction(
