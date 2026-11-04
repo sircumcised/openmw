@@ -1200,6 +1200,13 @@ namespace MWRender
         }
 
         addControllers();
+
+        // NerevarMoon getup: the blend reads what the controllers wrote, so it stays last in each bone's chain
+        for (const auto& [node, callback] : mGetupBlends)
+        {
+            node->removeUpdateCallback(callback);
+            node->addUpdateCallback(callback);
+        }
     }
 
     void Animation::adjustSpeedMult(const std::string& groupname, float speedmult)
@@ -2039,7 +2046,7 @@ namespace MWRender
             if (callback->relative())
                 poses.emplace_back(bone, *callback->relative());
         clearRagdoll();
-        play(group, MWMechanics::Priority_Knockdown, BlendMask_All, false, 1.f, "start", "stop", startPoint, 0);
+        play(group, MWMechanics::Priority_Knockdown, BlendMask_All, true, 1.f, "start", "stop", startPoint, 0);
         for (const auto& [bone, relative] : poses)
         {
             auto node = getNodeMap().find(bone);

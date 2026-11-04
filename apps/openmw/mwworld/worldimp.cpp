@@ -358,6 +358,7 @@ namespace MWWorld
         mRendering->clear();
         mProjectileManager->clear();
         mRagdollStates.clear();
+        mKnockdowns.clear(); // RefNums repeat across loads: an old knockdown must not reach the loaded actor
         mLocalScripts.clear();
 
         mWorldScene->clear();
@@ -1478,7 +1479,11 @@ namespace MWWorld
             const MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
             if (stats.isDead())
             {
-                it = mKnockdowns.erase(it); // the death ragdoll took over (startRagdoll)
+                // startRagdoll erases the entry when it takes over; still here: no death ragdoll (scripted animation,
+                // water), so the knockdown body ends now and kill() can finish the death
+                if (jolt->isRagdollActive(ptr))
+                    jolt->freezeRagdoll(ptr);
+                it = mKnockdowns.erase(it);
                 continue;
             }
             knockdown.mTime += duration;
