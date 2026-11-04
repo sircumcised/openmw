@@ -45,6 +45,8 @@ namespace MWPhysics
         constexpr std::size_t sMaxRagdolls = 8;
         constexpr float sRagdollTimeout = 6.f; // seconds before a fall is frozen anyway
         constexpr float sLandingSpeed = 150.f; // units/s
+        constexpr float sRollTime = 0.6f; // seconds
+        constexpr float sRollSpeed = 10.f; // rad/s about the pelvis-head axis
 
         void trace(const char* format, ...)
         {
@@ -114,6 +116,8 @@ namespace MWPhysics
             float mFallSpeed = 0.f; // downward speed of pelvis/chest at the previous step
             bool mLanded = false;
             std::uint64_t mOrder = 0;
+            JoltWorld::RagdollMode mMode = JoltWorld::RagdollMode::Death;
+            float mRollLeft = 0.f; // seconds of roll left, 0 when not rolling
         };
 
         // First member: the ones below allocate through JPH::Allocate, null until RegisterDefaultAllocator
@@ -205,6 +209,8 @@ namespace MWPhysics
         RagdollPose poseOf(const Ragdoll& ragdoll, bool frozen)
         {
             RagdollPose pose{ ragdoll.mPtr, {}, osg::Vec3f(), frozen, std::nullopt };
+            pose.mAge = ragdoll.mAge;
+            pose.mRolling = ragdoll.mRollLeft > 0.f;
             float lowest = std::numeric_limits<float>::max();
             for (std::size_t i = 0; i < ragdoll.mNames.size(); ++i)
             {
@@ -236,6 +242,56 @@ namespace MWPhysics
                 mPoses.push_back(poseOf(found->second, true));
             found->second.mRagdoll->RemoveFromPhysicsSystem();
             mRagdolls.erase(found);
+        }
+
+        osg::Vec3f bodyPosition(const Ragdoll& ragdoll, std::string_view name)
+        {
+            for (std::size_t i = 0; i < ragdoll.mNames.size(); ++i)
+                if (Misc::StringUtils::ciEqual(ragdoll.mNames[i], name))
+                {
+                    const JPH::RVec3 p = bodies().GetPosition(ragdoll.mRagdoll->GetBodyID(static_cast<int>(i)));
+                    return osg::Vec3f(static_cast<float>(p.GetX()), static_cast<float>(p.GetY()),
+                        static_cast<float>(p.GetZ()));
+                }
+            return osg::Vec3f();
+        }
+
+        // Pelvis -> head axis (unit) and the facing direction: up x right, right = left upper arm -> right upper arm
+        std::pair<osg::Vec3f, osg::Vec3f> axisAndFacing(const Ragdoll& ragdoll)
+        {
+            osg::Vec3f up = bodyPosition(ragdoll, "Bip01 Head") - bodyPosition(ragdoll, "Bip01 Pelvis");
+            osg::Vec3f right
+                = bodyPosition(ragdoll, "Bip01 R UpperArm") - bodyPosition(ragdoll, "Bip01 L UpperArm");
+            up.normalize();
+            osg::Vec3f facing = up ^ right;
+            facing.normalize();
+            return { up, facing };
+        }
+
+        // One roll step: the whole body turns as one piece about the pelvis-head axis, toward chest up
+        void rollStep(Ragdoll& ragdoll)
+        {
+            const auto [axis, facing] = axisAndFacing(ragdoll);
+            if (facing.z() > 0.3f)
+            {
+                ragdoll.mRollLeft = 0.f;
+                return;
+            }
+            const float sign = ((axis ^ facing).z() >= 0.f) ? 1.f : -1.f;
+            const osg::Vec3f omega = axis * (sign * sRollSpeed);
+            const osg::Vec3f centre = bodyPosition(ragdoll, "Bip01 Pelvis");
+            for (std::size_t i = 0; i < ragdoll.mNames.size(); ++i)
+            {
+                const JPH::BodyID id = ragdoll.mRagdoll->GetBodyID(static_cast<int>(i));
+                const JPH::RVec3 p = bodies().GetPosition(id);
+                const osg::Vec3f r = osg::Vec3f(static_cast<float>(p.GetX()), static_cast<float>(p.GetY()),
+                                         static_cast<float>(p.GetZ()))
+                    - centre;
+                const osg::Vec3f v = omega ^ r;
+                const float vz = bodies().GetLinearVelocity(id).GetZ();
+                bodies().SetLinearAndAngularVelocity(id, JPH::Vec3(v.x(), v.y(), std::min(v.z(), 0.f) + vz),
+                    JPH::Vec3(omega.x(), omega.y(), omega.z()));
+            }
         }
 
         void removeDynamic(Key key)
@@ -362,7 +418,7 @@ namespace MWPhysics
     }
 
     bool JoltWorld::addRagdoll(const MWWorld::Ptr& ptr, const std::vector<RagdollBone>& bones, float dt,
-        const osg::Vec3f& impulse, float massKg)
+        const osg::Vec3f& impulse, float massKg, RagdollMode mode)
     {
         mImpl->freezeRagdoll(ptr.mRef);
         RagdollBuild build = makeRagdoll(bones, massKg, sLayerMoving);
@@ -403,6 +459,25 @@ namespace MWPhysics
         entry.mScales = std::move(build.mScales);
         entry.mChest = build.mChest;
         entry.mOrder = mImpl->mRagdollCounter;
+        entry.mMode = mode;
+        return true;
+    }
+
+    float JoltWorld::chestUpZ(const MWWorld::Ptr& ptr) const
+    {
+        auto found = mImpl->mRagdolls.find(ptr.mRef);
+        if (found == mImpl->mRagdolls.end())
+            return 0.f;
+        return mImpl->axisAndFacing(found->second).second.z();
+    }
+
+    bool JoltWorld::rollToBack(const MWWorld::Ptr& ptr)
+    {
+        auto found = mImpl->mRagdolls.find(ptr.mRef);
+        if (found == mImpl->mRagdolls.end() || mImpl->axisAndFacing(found->second).second.z() >= -0.3f)
+            return false;
+        found->second.mRollLeft = sRollTime;
+        found->second.mRagdoll->Activate();
         return true;
     }
 
@@ -512,7 +587,14 @@ namespace MWPhysics
         for (auto& [key, ragdoll] : mImpl->mRagdolls)
         {
             ragdoll.mAge += steps * sStep;
+            if (ragdoll.mRollLeft > 0.f)
+            {
+                ragdoll.mRollLeft = std::max(ragdoll.mRollLeft - steps * sStep, 0.f);
+                if (ragdoll.mRollLeft > 0.f)
+                    mImpl->rollStep(ragdoll);
+            }
             RagdollPose pose = mImpl->poseOf(ragdoll, false);
+            pose.mAsleep = !ragdoll.mRagdoll->IsActive();
             // First hard landing: the downward speed of pelvis or chest collapses
             float down = 0.f;
             for (int i : { 0, ragdoll.mChest })
@@ -524,7 +606,8 @@ namespace MWPhysics
                 pose.mFallSpeed = ragdoll.mFallSpeed;
             }
             ragdoll.mFallSpeed = down;
-            if (!ragdoll.mRagdoll->IsActive() || ragdoll.mAge >= sRagdollTimeout)
+            if (ragdoll.mMode == RagdollMode::Death
+                && (!ragdoll.mRagdoll->IsActive() || ragdoll.mAge >= sRagdollTimeout))
                 stopped.push_back(key);
             else
                 mImpl->mPoses.push_back(std::move(pose));

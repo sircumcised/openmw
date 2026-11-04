@@ -75,12 +75,28 @@ namespace MWPhysics
             osg::Vec3f mLowest; // pelvis x/y, lowest bone z
             bool mFrozen; // stopped or timed out: the bodies are gone, this pose is final
             std::optional<float> mFallSpeed; // set once: speed (units/s) of the first hard landing of pelvis/chest
+            bool mAsleep = false; // every body inactive at this step
+            float mAge = 0.f; // seconds since addRagdoll (or the last impulse)
+            bool mRolling = false; // rollToBack still turning the body
+        };
+
+        /// Death: frozen when it sleeps or after 6 s. Knockdown: never frozen on its own (the caller freezes or
+        /// drops it); both count in the cap of 8 active ragdolls.
+        enum class RagdollMode
+        {
+            Death,
+            Knockdown,
         };
 
         /// Bodies built from `bones` (see joltragdoll.cpp for the required ones), started at the bones' own
         /// motion plus `impulse` (units/s) on the chest. False, with nothing created, when a required bone is missing.
         bool addRagdoll(const MWWorld::Ptr& ptr, const std::vector<RagdollBone>& bones, float dt,
-            const osg::Vec3f& impulse, float massKg);
+            const osg::Vec3f& impulse, float massKg, RagdollMode mode = RagdollMode::Death);
+        /// z of the direction the chest faces (from head, pelvis and upper arms); 0 without an active ragdoll.
+        float chestUpZ(const MWWorld::Ptr& ptr) const;
+        /// Turns a face-down body (chestUpZ < -0.3) onto its back: at most 0.6 s, ends at chestUpZ > 0.3. False
+        /// without an active ragdoll or when the chest does not face down.
+        bool rollToBack(const MWWorld::Ptr& ptr);
         /// Adds `impulse` (units/s) to the named bone's body (chest when empty or unknown). False when not falling.
         bool applyRagdollImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, std::string_view bone);
         bool isRagdollActive(const MWWorld::Ptr& ptr) const;
