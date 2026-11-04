@@ -489,26 +489,33 @@ namespace MWLua
                     MWMechanics::CreatureStats& stats = victim.getClass().getCreatureStats(victim);
                     const float healthBefore = stats.getHealth().getCurrent();
                     const bool wasDead = stats.isDead();
+                    const bool wasDown = stats.getKnockedDown();
                     victim.getClass().onHit(victim, damages, weaponId, attackerPtr, successful, sourceType);
 
                     // NerevarMoon: NMHitResult, the outcome after the engine applied the hit (same frame as the
                     // health change), to the victim and to the attacker
-                    sol::table result(context.mLua->unsafeState(), sol::create);
-                    result["victim"] = LObject(victim);
-                    if (!attackerPtr.isEmpty())
-                        result["attacker"] = LObject(attackerPtr);
-                    result["damage"] = std::max(healthBefore - stats.getHealth().getCurrent(), 0.f);
-                    result["killed"] = !wasDead && stats.isDead();
-                    result["blocked"] = blocked;
-                    result["critical"] = critical;
-                    result["knockdown"] = stats.getKnockedDown();
-                    result["successful"] = successful;
-                    result["sourceType"] = sourceTypeStr;
-                    if (!weaponId.empty())
-                        result["weapon"] = weaponId.serializeText();
-                    context.mLuaManager->sendLocalEvent(victim, "NMHitResult", result);
-                    if (!attackerPtr.isEmpty() && attackerPtr.getRefData().getLuaScripts())
-                        context.mLuaManager->sendLocalEvent(attackerPtr, "NMHitResult", result);
+                    const float damage = std::max(healthBefore - stats.getHealth().getCurrent(), 0.f);
+                    const bool killed = !wasDead && stats.isDead();
+                    const bool knockdown = !wasDown && stats.getKnockedDown();
+                    context.mLua->protectedCall([&](LuaUtil::LuaView& view) {
+                        sol::table result = view.newTable();
+                        result["victim"] = LObject(victim);
+                        if (!attackerPtr.isEmpty())
+                            result["attacker"] = LObject(attackerPtr);
+                        result["damage"] = damage;
+                        result["killed"] = killed;
+                        result["blocked"] = blocked;
+                        result["critical"] = critical;
+                        result["knockdown"] = knockdown;
+                        result["successful"] = successful;
+                        result["sourceType"] = sourceTypeStr;
+                        if (!weaponId.empty())
+                            result["weapon"] = weaponId.serializeText();
+                        context.mLuaManager->sendLocalEvent(victim, "NMHitResult", result);
+                        if (!attackerPtr.isEmpty() && attackerPtr != victim
+                            && attackerPtr.getRefData().getLuaScripts())
+                            context.mLuaManager->sendLocalEvent(attackerPtr, "NMHitResult", result);
+                    });
                 },
                 "HitAction");
         };
@@ -521,7 +528,9 @@ namespace MWLua
         };
         actor["isKnockedOut"] = [](const Object& o) {
             const MWMechanics::CreatureStats& stats = o.ptr().getClass().getCreatureStats(o.ptr());
-            return stats.getKnockedDown() && stats.getFatigue().getCurrent() < 0;
+            // same rule as CharacterController: fatigue below zero, or a zero fatigue base
+            return stats.getKnockedDown()
+                && (stats.getFatigue().getCurrent() < 0 || stats.getFatigue().getBase() == 0);
         };
         actor["knockDown"] = [context](const Object& o) {
             context.mLuaManager->addAction(
@@ -536,7 +545,7 @@ namespace MWLua
                 "KnockDownAction");
         };
 
-        // NerevarMoon: per-actor time scale in [0, 2] for animation, AI timers and walking speed; not saved
+        // NerevarMoon: per-actor time scale in [0, 2] for animation, turning and movement speed; not saved
         actor["getTimeScale"] = [](const Object& o) {
             return o.ptr().getClass().getCreatureStats(o.ptr()).getTimeScale();
         };

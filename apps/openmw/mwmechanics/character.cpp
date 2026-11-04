@@ -2415,6 +2415,7 @@ namespace MWMechanics
                     scale *= std::max(1.f, speedMult / maxSpeedMult);
             }
 
+            rot *= mPtr.getClass().getCreatureStats(mPtr).getTimeScale(); // NerevarMoon: per-actor time scale
             if (!mSkipAnim)
             {
                 if (!isKnockedDown() && !isKnockedOut())
@@ -2512,6 +2513,8 @@ namespace MWMechanics
             const float timeScale = cls.getCreatureStats(mPtr).getTimeScale();
             movement.x() *= scale * timeScale;
             movement.y() *= scale * timeScale;
+            if (world->isSwimming(mPtr) || world->isFlying(mPtr))
+                movement.z() *= timeScale; // jumps keep their height: z on the ground is the jump impulse
             world->queueMovement(mPtr, movement);
         }
 

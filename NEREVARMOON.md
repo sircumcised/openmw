@@ -61,5 +61,5 @@ additive: a stock OpenMW mod keeps working, a mod that uses these additions need
 - `types.Actor.isKnockedDown`, `isKnockedOut`, `knockDown` (queued `KnockDownAction`, sets
   `CreatureStats::setKnockedDown`; the knockdown animation decides the duration).
 - `types.Actor.setTimeScale(actor, 0..2)` / `getTimeScale`: `CreatureStats::mTimeScale` (not saved) multiplies the
-  duration of the actor's `CharacterController::update` (`mwmechanics/actors.cpp`) and the walking speed queued to
-  the physics (`mwmechanics/character.cpp`).
+  duration of the actor's `CharacterController::update` (`mwmechanics/actors.cpp`), its turning and the walking,
+  swimming and flying speed queued to the physics (`mwmechanics/character.cpp`). AI decisions run at normal speed.

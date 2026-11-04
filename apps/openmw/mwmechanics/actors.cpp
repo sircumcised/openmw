@@ -1710,7 +1710,7 @@ namespace MWMechanics
                     actor.setPositionAdjusted(true);
                 }
 
-                // NerevarMoon: per-actor time scale (types.Actor.setTimeScale) slows animation and AI timers
+                // NerevarMoon: per-actor time scale (types.Actor.setTimeScale) slows the animation (AI decisions keep normal speed)
                 ctrl.update(
                     duration * actor.getPtr().getClass().getCreatureStats(actor.getPtr()).getTimeScale());
 

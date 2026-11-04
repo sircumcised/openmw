@@ -67,8 +67,8 @@
 -- @param openmw.core#GameObject actor
 
 ---
--- NerevarMoon: per-actor time scale, 1 = normal, clamped to [0, 2]. Scales the actor's animation, AI timers and
--- walking speed (for hitstop and slow or haste effects). Applied at the start of the next frame; not saved.
+-- NerevarMoon: per-actor time scale, 1 = normal, clamped to [0, 2]. Scales the actor's animation, turning and
+-- walking speed (swimming and flying included) (for hitstop and slow or haste effects). Applied at the start of the next frame; not saved.
 -- @function [parent=#Actor] setTimeScale
 -- @param openmw.core#GameObject actor
 -- @param #number scale
