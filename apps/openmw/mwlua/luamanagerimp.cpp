@@ -15,6 +15,7 @@
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
 
+#include <components/lua/luatiming.hpp>
 #include <components/settings/values.hpp>
 
 #include <components/l10n/manager.hpp>
@@ -213,11 +214,35 @@ namespace MWLua
 
     void LuaManager::update()
     {
+        // NerevarMoon: lua timing log. Script index -2 is the GC step.
+        LuaUtil::LuaTiming::sEnabled = Settings::lua().mLuaTimingLog;
         if (const int steps = Settings::lua().mGcStepsPerFrame; steps > 0)
+        {
+            const auto gcStart = std::chrono::steady_clock::now();
             lua_gc(mLua.unsafeState(), LUA_GCSTEP, steps);
+            if (LuaUtil::LuaTiming::sEnabled)
+                LuaUtil::LuaTiming::add(
+                    -2, "[gc]", std::chrono::duration<double>(std::chrono::steady_clock::now() - gcStart).count());
+        }
 
         if (mPlayer.isEmpty())
             return; // The game is not started yet.
+
+        if (LuaUtil::LuaTiming::sEnabled)
+        {
+            LuaUtil::LuaTiming::addFrame();
+            if (++mTimingFrames >= 600)
+            {
+                mTimingFrames = 0;
+                const auto scriptName = [this](int i) -> std::string {
+                    if (i < 0 || static_cast<std::size_t>(i) >= mConfiguration.size())
+                        return "[gc]";
+                    return std::string(mConfiguration[i].mScriptPath.value());
+                };
+                for (const std::string& line : LuaUtil::LuaTiming::formatAndReset(scriptName))
+                    Log(Debug::Info) << line;
+            }
+        }
 
         MWWorld::Ptr newPlayerPtr = MWBase::Environment::get().getWorld()->getPlayerPtr();
         if (!(getId(mPlayer) == getId(newPlayerPtr)))

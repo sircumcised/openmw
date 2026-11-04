@@ -21,6 +21,7 @@ on:
       - nm-vfxoffset
       - nm-bodyview
       - nm-jolt
+      - nm-lua
 
 jobs:
   Windows:

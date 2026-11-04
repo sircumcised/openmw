@@ -39,3 +39,15 @@ additive: a stock OpenMW mod keeps working, a mod that uses these additions need
   `rotateObject`; a body that falls asleep becomes a normal object again.
 - `[Physics] jolt = true` (settings-default.cfg); false creates nothing.
 - Lua (global): `world.physicsAvailable`, `world.physicsSetDynamic(object, velocity|nil)`.
+
+## Lua timing log
+- Setting `[Lua] lua timing log = false`. With `true`, every 600 frames `openmw.log` gets the real time
+  (`std::chrono::steady_clock`) spent per Lua script and handler, summed over all instances of the script:
+  `NMLUA|frames=<f>` followed by up to 40 lines
+  `NMLUA|<script>|<label>|calls=<n>|ms_total=<x>|ms_per_frame=<y>|ms_max=<z>`, sorted by `ms_total`.
+- Labels: engine handler name (`onUpdate`, `onFrame`, `onHit`...), `event:<event name>`, `timer`, `callback`
+  (async callbacks and every other call), and the script `[gc]` for the Lua GC step of `gc steps per frame`.
+- Only the outermost call counts when calls nest. Unlike the F10 Lua profiler (instruction counts, slows Lua
+  down a lot) this is wall time, with two clock reads per call when on and one boolean test when off.
+- Code: `components/lua/luatiming.*`, `LuaUtil::call(ScriptId, ...)` in `luastate.hpp`, labels in
+  `scriptscontainer.*`, flush in `mwlua/luamanagerimp.cpp` (`LuaManager::update`).
