@@ -297,6 +297,16 @@ namespace MWBase
         /// NerevarMoon: throws an object (not an actor) as a box of its visual bounds at `velocity` (units/s);
         /// nullopt stops it where it is. False when it cannot be simulated.
         virtual bool setDynamic(const MWWorld::Ptr& ptr, const std::optional<osg::Vec3f>& velocity) = 0;
+        /// NerevarMoon: the dying actor falls as a ragdoll instead of playing a death animation. False when it
+        /// cannot ([Physics] ragdoll off, no Jolt, swimming, skeleton without the Bip01 biped bones).
+        virtual bool startRagdoll(const MWWorld::Ptr& actor) = 0;
+        /// NerevarMoon: the actor's body is a ragdoll, falling or frozen.
+        virtual bool isRagdoll(const MWWorld::Ptr& actor) = 0;
+        /// NerevarMoon: the ragdoll is still falling (Jolt bodies exist).
+        virtual bool isRagdollFalling(const MWWorld::Ptr& actor) const = 0;
+        /// NerevarMoon: pushes a ragdoll's bone (`bone` empty: chest) by `impulse` (units/s); a frozen ragdoll
+        /// falls again. False for anything else.
+        virtual bool ragdollImpulse(const MWWorld::Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) = 0;
 
         virtual MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos)

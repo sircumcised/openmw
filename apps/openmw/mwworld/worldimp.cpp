@@ -16,6 +16,7 @@
 #include <components/esm3/cellref.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
+#include <components/esm3/ragdollstate.hpp>
 #include <components/esm3/loadclas.hpp>
 #include <components/esm3/loadcrea.hpp>
 #include <components/esm3/loadench.hpp>
@@ -356,6 +357,7 @@ namespace MWWorld
         mWeatherManager->clear();
         mRendering->clear();
         mProjectileManager->clear();
+        mRagdollStates.clear();
         mLocalScripts.clear();
 
         mWorldScene->clear();
@@ -389,7 +391,8 @@ namespace MWWorld
             + 1 // weather record
             + 1 // levitation/teleport enabled state
             + 1 // camera
-            + 1; // random state.
+            + 1 // random state.
+            + mRagdollStates.size();
     }
 
     size_t World::countSavedGameCells() const
@@ -425,6 +428,13 @@ namespace MWWorld
         writer.startRecord(ESM::REC_CAM_);
         writer.writeHNT("FIRS", isFirstPerson());
         writer.endRecord(ESM::REC_CAM_);
+
+        for (const auto& [actor, state] : mRagdollStates)
+        {
+            writer.startRecord(ESM::REC_NMRD);
+            state.save(writer);
+            writer.endRecord(ESM::REC_NMRD);
+        }
     }
 
     void World::readRecord(ESM::ESMReader& reader, uint32_t type)
@@ -434,6 +444,14 @@ namespace MWWorld
             case ESM::REC_ACTC:
                 reader.skipRecord();
                 return;
+            case ESM::REC_NMRD:
+            {
+                ESM::RagdollState state;
+                state.load(reader);
+                if (state.mActor.isSet())
+                    mRagdollStates[state.mActor] = std::move(state);
+                return;
+            }
             case ESM::REC_ENAB:
                 reader.getHNT(mTeleportEnabled, "TELE");
                 reader.getHNT(mLevitationEnabled, "LEVT");
@@ -1384,6 +1402,140 @@ namespace MWWorld
             if (moved.mSettled)
                 mPhysics->stopDynamic(ptr);
         }
+
+        // NerevarMoon: ragdolls pose their skeletons and drag the actor along with the pelvis
+        applyRagdollStates(duration);
+        if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+        {
+            for (const MWPhysics::JoltWorld::RagdollPose& pose : jolt->takeRagdollPoses())
+            {
+                Ptr ptr = pose.mPtr;
+                MWRender::Animation* animation = ptr.isEmpty() ? nullptr : getAnimation(ptr);
+                if (animation == nullptr || !ptr.isInCell() || !ptr.getRefData().isEnabled())
+                    continue;
+                animation->setRagdollWorldPose(pose.mWorld);
+                ptr = moveObject(ptr, pose.mLowest);
+
+                // Keep the pose for saves and for the next visit of the cell
+                ESM::RagdollState state;
+                state.mActor = ptr.getCellRef().getRefNum();
+                osg::Vec3f pelvis;
+                for (const auto& [bone, rotation] : animation->getRagdollLocalPose(pelvis))
+                    state.mBones.emplace_back(bone, ESM::Quaternion(rotation));
+                state.mPelvisPosition = ESM::Vector3(pelvis);
+                if (state.mActor.isSet())
+                    mRagdollStates[state.mActor] = std::move(state);
+                if (pose.mFallSpeed)
+                {
+                    const float mass = 70.f * std::pow(ptr.getCellRef().getScale(), 3.f);
+                    const ESM::RefId sound = ESM::RefId::stringRefId(mass < 50.f ? "Body Fall Small"
+                            : mass < 90.f                                    ? "Body Fall Medium"
+                                                                             : "Body Fall Large");
+                    MWBase::Environment::get().getSoundManager()->playSound3D(
+                        ptr, sound, std::min(*pose.mFallSpeed / 600.f, 1.f), 1.f);
+                }
+                if (pose.mFrozen)
+                    Log(Debug::Info) << "[ragdoll] frozen " << ptr.getCellRef().getRefId();
+            }
+        }
+    }
+
+    void World::applyRagdollStates(float duration)
+    {
+        mRagdollApplyTimer += duration;
+        if (mRagdollApplyTimer < 0.5f || mRagdollStates.empty())
+            return;
+        mRagdollApplyTimer = 0.f;
+        for (auto it = mRagdollStates.begin(); it != mRagdollStates.end();)
+        {
+            const Ptr ptr = mWorldModel.getPtr(it->first);
+            if (ptr.isEmpty() || !ptr.isInCell() || !ptr.getClass().isActor())
+            {
+                ++it;
+                continue;
+            }
+            if (!ptr.getClass().getCreatureStats(ptr).isDead())
+            {
+                it = mRagdollStates.erase(it); // resurrected
+                continue;
+            }
+            MWRender::Animation* animation = getAnimation(ptr);
+            if (animation != nullptr && !animation->isRagdoll())
+            {
+                std::vector<std::pair<std::string, osg::Quat>> bones;
+                for (const auto& [bone, rotation] : it->second.mBones)
+                    bones.emplace_back(bone, osg::Quat(rotation));
+                // Bones missing from this skeleton are skipped; no pelvis: the death animation stays
+                bool hasPelvis = false;
+                for (const auto& [bone, rotation] : bones)
+                    hasPelvis |= Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis");
+                if (hasPelvis)
+                    animation->setRagdollLocalPose(bones, osg::Vec3f(it->second.mPelvisPosition));
+            }
+            ++it;
+        }
+    }
+
+    bool World::startRagdoll(const Ptr& actor)
+    {
+        MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        if (jolt == nullptr || !Settings::physics().mRagdoll || !actor.getClass().isActor() || !actor.isInCell()
+            || isSwimming(actor))
+            return false;
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr)
+            return false;
+        const std::vector<MWPhysics::RagdollBone> bones = animation->getRagdollBones();
+
+        // The blow: from the last attacker towards the victim, harder for a charged attack
+        osg::Vec3f impulse(0.f, 0.f, 60.f);
+        const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
+        const Ptr attacker = mWorldModel.getPtr(stats.getHitAttemptActor());
+        if (!attacker.isEmpty() && attacker != actor)
+        {
+            osg::Vec3f dir = actor.getRefData().getPosition().asVec3() - attacker.getRefData().getPosition().asVec3();
+            dir.z() = 0.f;
+            if (dir.normalize() > 0.f)
+            {
+                const float strength = std::clamp(
+                    MWBase::Environment::get().getMechanicsManager()->getAttackStrength(attacker), 0.f, 1.f);
+                impulse += dir * (250.f + 350.f * strength);
+            }
+        }
+        const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
+        if (!jolt->addRagdoll(actor, bones, 1.f / 60.f, impulse, mass))
+            return false;
+
+        // The first step of this frame poses the skeleton and stops the animation (World::doPhysics)
+        Log(Debug::Info) << "[ragdoll] start " << actor.getCellRef().getRefId() << " bones=" << bones.size();
+        return true;
+    }
+
+    bool World::isRagdoll(const Ptr& actor)
+    {
+        const MWRender::Animation* animation = actor.isEmpty() ? nullptr : getAnimation(actor);
+        return animation != nullptr && animation->isRagdoll();
+    }
+
+    bool World::isRagdollFalling(const Ptr& actor) const
+    {
+        const MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        return jolt != nullptr && jolt->isRagdollActive(actor);
+    }
+
+    bool World::ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone)
+    {
+        MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        if (jolt == nullptr || !isRagdoll(actor))
+            return false;
+        if (jolt->applyRagdollImpulse(actor, impulse, bone))
+            return true;
+        // Frozen corpse: a new fall from its current pose
+        MWRender::Animation* animation = getAnimation(actor);
+        const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
+        if (!jolt->addRagdoll(actor, animation->getRagdollBones(), 1.f / 60.f, osg::Vec3f(), mass))
+            return false;
+        return jolt->applyRagdollImpulse(actor, impulse, bone);
     }
 
     bool World::physicsAvailable() const

@@ -5,6 +5,9 @@
 #include <osg/ref_ptr>
 
 #include <components/debug/debuglog.hpp>
+#include <components/esm3/ragdollstate.hpp>
+
+#include <map>
 #include <components/esm3/readerscache.hpp>
 #include <components/misc/rng.hpp>
 #include <components/settings/settings.hpp>
@@ -106,6 +109,11 @@ namespace MWWorld
         std::unique_ptr<MWWorld::WeatherManager> mWeatherManager;
         std::unique_ptr<MWWorld::DateTimeManager> mTimeManager;
         std::unique_ptr<ProjectileManager> mProjectileManager;
+
+        // NerevarMoon: ragdoll corpse poses by actor, kept across cell loads and saved as NMRD records
+        std::map<ESM::RefNum, ESM::RagdollState> mRagdollStates;
+        float mRagdollApplyTimer = 0.f;
+        void applyRagdollStates(float duration);
 
         bool mSky;
         bool mGodMode;
@@ -377,6 +385,10 @@ namespace MWWorld
 
         bool physicsAvailable() const override;
         bool setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity) override;
+        bool startRagdoll(const Ptr& actor) override;
+        bool isRagdoll(const Ptr& actor) override;
+        bool isRagdollFalling(const Ptr& actor) const override;
+        bool ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) override;
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;

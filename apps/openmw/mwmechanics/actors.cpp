@@ -2350,6 +2350,14 @@ namespace MWMechanics
         return it->second->getCharacterController().isCastingSpell();
     }
 
+    float Actors::getAttackStrength(const MWWorld::Ptr& ptr) const
+    {
+        const auto it = mIndex.find(ptr.mRef);
+        if (it == mIndex.end())
+            return 0.f;
+        return std::max(it->second->getCharacterController().getAttackStrength(), 0.f);
+    }
+
     bool Actors::isAttackingOrSpell(const MWWorld::Ptr& ptr) const
     {
         const auto it = mIndex.find(ptr.mRef);
