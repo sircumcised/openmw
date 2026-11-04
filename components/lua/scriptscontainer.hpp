@@ -10,6 +10,7 @@
 #include <components/esm/luascripts.hpp>
 
 #include "luastate.hpp"
+#include "luatiming.hpp"
 #include "serialization.hpp"
 
 namespace LuaUtil
@@ -248,6 +249,7 @@ namespace LuaUtil
         void callEngineHandlers(EngineHandlerList& handlers, const Args&... args)
         {
             ensureLoaded();
+            ScopedLuaTimingLabel timingLabel(handlers.mName); // NerevarMoon: lua timing log
             for (Handler& handler : handlers.mList)
             {
                 try

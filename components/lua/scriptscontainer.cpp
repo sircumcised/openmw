@@ -365,6 +365,9 @@ namespace LuaUtil
                 return;
             }
             EventHandlerList& list = it->second;
+            // NerevarMoon: lua timing log (the label string is built only when the log is on)
+            ScopedLuaTimingLabel timingLabel(
+                LuaTiming::sEnabled ? "event:" + std::string(eventName) : std::string("callback"));
             for (size_t i = list.size(); i > 0; --i)
             {
                 const Handler& h = list[i - 1];
@@ -718,6 +721,7 @@ namespace LuaUtil
 
     void ScriptsContainer::callTimer(const Timer& t)
     {
+        ScopedLuaTimingLabel timingLabel("timer"); // NerevarMoon: lua timing log
         try
         {
             Script& script = getScript(t.mScriptId);

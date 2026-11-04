@@ -11,6 +11,7 @@
 
 #include "configuration.hpp"
 #include "luastateptr.hpp"
+#include "luatiming.hpp"
 
 namespace VFS
 {
@@ -255,6 +256,7 @@ namespace LuaUtil
     template <typename... Args>
     sol::protected_function_result call(ScriptId scriptId, const sol::protected_function& fn, Args&&... args)
     {
+        ScopedLuaTiming timing(scriptId.mContainer ? scriptId.mIndex : -1); // NerevarMoon: lua timing log
         LuaState* luaState = nullptr;
         if (LuaState::sProfilerEnabled && scriptId.mContainer)
         {
