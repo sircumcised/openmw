@@ -42,6 +42,44 @@
 -- @return #boolean
 
 ---
+-- NerevarMoon: true when the local event `NMHitResult` exists. After the engine applies a hit (the same frame the
+-- health changes) it sends `NMHitResult` to the victim and, if it has Lua scripts, to the attacker, with the fields
+-- `victim`, `attacker` (or nil), `damage` (health removed, >= 0), `killed`, `blocked`, `critical` (sneak attack),
+-- `knockdown`, `successful`, `sourceType` (as in the Hit event) and `weapon` (record id or nil).
+-- @field [parent=#Actor] #boolean hitResult
+
+---
+-- NerevarMoon: is the actor knocked down (lying on the ground, also when knocked out).
+-- @function [parent=#Actor] isKnockedDown
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
+-- NerevarMoon: is the actor knocked out (knocked down with fatigue below zero).
+-- @function [parent=#Actor] isKnockedOut
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
+-- NerevarMoon: knock the actor down, as a strong hit does. Applied at the start of the next frame; no effect on a
+-- dead actor or on one already down. The knockdown animation decides how long it stays down.
+-- @function [parent=#Actor] knockDown
+-- @param openmw.core#GameObject actor
+
+---
+-- NerevarMoon: per-actor time scale, 1 = normal, clamped to [0, 2]. Scales the actor's animation, AI timers and
+-- walking speed (for hitstop and slow or haste effects). Applied at the start of the next frame; not saved.
+-- @function [parent=#Actor] setTimeScale
+-- @param openmw.core#GameObject actor
+-- @param #number scale
+
+---
+-- NerevarMoon: current per-actor time scale (see setTimeScale).
+-- @function [parent=#Actor] getTimeScale
+-- @param openmw.core#GameObject actor
+-- @return #number
+
+---
 -- Check if the given actor's death process is finished.
 -- @function [parent=#Actor] isDeathFinished
 -- @param openmw.core#GameObject actor

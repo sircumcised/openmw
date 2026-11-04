@@ -615,7 +615,7 @@ namespace MWLua
 
     void LuaManager::onHit(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim, const MWWorld::Ptr& weapon,
         const MWWorld::Ptr& ammo, int attackType, float attackStrength, float damage, bool isHealth,
-        const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType sourceType)
+        const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType sourceType, bool critical, bool blocked)
     {
         mLua.protectedCall([&](LuaUtil::LuaView& view) {
             sol::table damageTable = view.newTable();
@@ -636,6 +636,8 @@ namespace MWLua
             data["damage"] = damageTable;
             data["hitPos"] = hitPos;
             data["successful"] = successful;
+            data["critical"] = critical; // NerevarMoon
+            data["blocked"] = blocked; // NerevarMoon
             switch (sourceType)
             {
                 case MWMechanics::DamageSourceType::Unspecified:

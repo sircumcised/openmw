@@ -1710,7 +1710,9 @@ namespace MWMechanics
                     actor.setPositionAdjusted(true);
                 }
 
-                ctrl.update(duration);
+                // NerevarMoon: per-actor time scale (types.Actor.setTimeScale) slows animation and AI timers
+                ctrl.update(
+                    duration * actor.getPtr().getClass().getCreatureStats(actor.getPtr()).getTimeScale());
 
                 updateVisibility(actor.getPtr(), ctrl);
             }
@@ -1718,7 +1720,7 @@ namespace MWMechanics
             if (playerCharacter)
             {
                 MWBase::Environment::get().getWorld()->applyDeferredPreviewRotationToPlayer(duration);
-                playerCharacter->update(duration);
+                playerCharacter->update(duration * player.getClass().getCreatureStats(player).getTimeScale()); // NerevarMoon
                 playerCharacter->setVisibility(1.f);
                 MWBase::LuaManager::ActorControls* luaControls
                     = MWBase::Environment::get().getLuaManager()->getActorControls(player);

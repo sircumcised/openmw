@@ -2508,8 +2508,10 @@ namespace MWMechanics
                 }
             }
 
-            movement.x() *= scale;
-            movement.y() *= scale;
+            // NerevarMoon: the time scale also slows the walking speed handed to the physics
+            const float timeScale = cls.getCreatureStats(mPtr).getTimeScale();
+            movement.x() *= scale * timeScale;
+            movement.y() *= scale * timeScale;
             world->queueMovement(mPtr, movement);
         }
 

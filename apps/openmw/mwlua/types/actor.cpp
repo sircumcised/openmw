@@ -1,5 +1,6 @@
 #include "types.hpp"
 
+#include <algorithm>
 #include <array>
 
 #include <components/detournavigator/agentbounds.hpp>
@@ -472,17 +473,82 @@ namespace MWLua
                 }
             }
 
+            // NerevarMoon: critical and blocked come from Npc::hit / Creature::hit through the Hit event
+            const bool critical = options.get_or("critical", false);
+            const bool blocked = options.get_or("blocked", false);
             context.mLuaManager->addAction(
-                [self = Object(self), damages = std::move(damageCpp),
+                [context, self = Object(self), damages = std::move(damageCpp),
                     attacker = options.get<sol::optional<Object>>("attacker"), weaponId,
-                    successful = options.get<bool>("successful"), sourceType = sourceType] {
+                    successful = options.get<bool>("successful"), sourceType = sourceType,
+                    sourceTypeStr = std::move(sourceTypeStr), critical, blocked] {
                     MWWorld::Ptr attackerPtr;
                     MWWorld::Ptr weaponPtr;
                     if (attacker)
-                        attackerPtr = attacker->ptr();
-                    self.ptr().getClass().onHit(self.ptr(), damages, weaponId, attackerPtr, successful, sourceType);
+                        attackerPtr = attacker->ptrOrEmpty();
+                    const MWWorld::Ptr victim = self.ptr();
+                    MWMechanics::CreatureStats& stats = victim.getClass().getCreatureStats(victim);
+                    const float healthBefore = stats.getHealth().getCurrent();
+                    const bool wasDead = stats.isDead();
+                    victim.getClass().onHit(victim, damages, weaponId, attackerPtr, successful, sourceType);
+
+                    // NerevarMoon: NMHitResult, the outcome after the engine applied the hit (same frame as the
+                    // health change), to the victim and to the attacker
+                    sol::table result(context.mLua->unsafeState(), sol::create);
+                    result["victim"] = LObject(victim);
+                    if (!attackerPtr.isEmpty())
+                        result["attacker"] = LObject(attackerPtr);
+                    result["damage"] = std::max(healthBefore - stats.getHealth().getCurrent(), 0.f);
+                    result["killed"] = !wasDead && stats.isDead();
+                    result["blocked"] = blocked;
+                    result["critical"] = critical;
+                    result["knockdown"] = stats.getKnockedDown();
+                    result["successful"] = successful;
+                    result["sourceType"] = sourceTypeStr;
+                    if (!weaponId.empty())
+                        result["weapon"] = weaponId.serializeText();
+                    context.mLuaManager->sendLocalEvent(victim, "NMHitResult", result);
+                    if (!attackerPtr.isEmpty() && attackerPtr.getRefData().getLuaScripts())
+                        context.mLuaManager->sendLocalEvent(attackerPtr, "NMHitResult", result);
                 },
                 "HitAction");
+        };
+        actor["hitResult"] = true; // NerevarMoon marker: the NMHitResult event exists
+
+        // NerevarMoon: knockdown state and trigger
+        actor["isKnockedDown"] = [](const Object& o) {
+            const MWWorld::Ptr& ptr = o.ptr();
+            return ptr.getClass().getCreatureStats(ptr).getKnockedDown();
+        };
+        actor["isKnockedOut"] = [](const Object& o) {
+            const MWMechanics::CreatureStats& stats = o.ptr().getClass().getCreatureStats(o.ptr());
+            return stats.getKnockedDown() && stats.getFatigue().getCurrent() < 0;
+        };
+        actor["knockDown"] = [context](const Object& o) {
+            context.mLuaManager->addAction(
+                [obj = Object(o)] {
+                    const MWWorld::Ptr ptr = obj.ptrOrEmpty();
+                    if (ptr.isEmpty())
+                        return;
+                    MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+                    if (!stats.isDead() && !stats.getKnockedDown())
+                        stats.setKnockedDown(true);
+                },
+                "KnockDownAction");
+        };
+
+        // NerevarMoon: per-actor time scale in [0, 2] for animation, AI timers and walking speed; not saved
+        actor["getTimeScale"] = [](const Object& o) {
+            return o.ptr().getClass().getCreatureStats(o.ptr()).getTimeScale();
+        };
+        actor["setTimeScale"] = [context](const Object& o, Misc::FiniteFloat scale) {
+            const float value = std::clamp(static_cast<float>(scale), 0.f, 2.f);
+            context.mLuaManager->addAction(
+                [obj = Object(o), value] {
+                    const MWWorld::Ptr ptr = obj.ptrOrEmpty();
+                    if (!ptr.isEmpty())
+                        ptr.getClass().getCreatureStats(ptr).setTimeScale(value);
+                },
+                "SetTimeScaleAction");
         };
 
         addActorStatsBindings(actor, context);
