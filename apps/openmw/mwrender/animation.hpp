@@ -5,8 +5,10 @@
 #include "animblendcontroller.hpp"
 #include "blendmask.hpp"
 #include "bonegroup.hpp"
+#include "ragdollpose.hpp"
 
 #include "../mwworld/movementdirection.hpp"
+#include "../mwphysics/joltworld.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include <components/misc/strings/algorithm.hpp>
@@ -258,6 +260,13 @@ namespace MWRender
         bool mPlayScriptedOnly;
         bool mRequiresBoneMap;
 
+        // NerevarMoon ragdoll: bones driven by Jolt; no animation plays while set
+        bool mRagdoll = false;
+        std::unordered_map<std::string, osg::ref_ptr<RagdollBoneCallback>, Misc::StringUtils::CiHash,
+            Misc::StringUtils::CiEqual>
+            mRagdollBones;
+        RagdollBoneCallback* ragdollCallback(const std::string& bone);
+
         const NodeMap& getNodeMap() const;
 
         /* Sets the appropriate animations on the bone groups based on priority by finding
@@ -474,6 +483,18 @@ namespace MWRender
             std::span<const std::string_view> prefixes) const;
 
         bool getPlayScriptedOnly() const { return mPlayScriptedOnly; }
+
+        /// NerevarMoon ragdoll. The Bip01 bones a ragdoll can use, with their world transforms now (mWorldPrev is
+        /// the same: the bones' own motion is not tracked). Empty without a skeleton.
+        std::vector<MWPhysics::RagdollBone> getRagdollBones() const;
+        /// Puts the listed bones at these world transforms from now on and stops every animation of this actor.
+        void setRagdollWorldPose(const std::vector<std::pair<std::string, osg::Matrixf>>& world);
+        /// Same with local rotations (from a save); the pelvis also gets its local position back.
+        void setRagdollLocalPose(
+            const std::vector<std::pair<std::string, osg::Quat>>& local, const osg::Vec3f& pelvisLocalPos);
+        /// Local rotations of the ragdoll bones as they are now, and the pelvis' local position.
+        std::vector<std::pair<std::string, osg::Quat>> getRagdollLocalPose(osg::Vec3f& pelvisLocalPos) const;
+        bool isRagdoll() const { return mRagdoll; }
         void setPlayScriptedOnly(bool playScriptedOnly) { mPlayScriptedOnly = playScriptedOnly; }
 
         virtual bool useShieldAnimations() const { return false; }

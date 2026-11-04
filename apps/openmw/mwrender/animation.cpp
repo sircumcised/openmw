@@ -888,7 +888,7 @@ namespace MWRender
         float speedmult, std::string_view start, std::string_view stop, float startpoint, uint32_t loops,
         bool loopfallback)
     {
-        if (!mObjectRoot || mAnimSources.empty())
+        if (!mObjectRoot || mAnimSources.empty() || mRagdoll)
             return;
 
         if (groupname.empty())
@@ -1115,6 +1115,8 @@ namespace MWRender
 
     void Animation::resetActiveGroups()
     {
+        if (mRagdoll)
+            return; // the ragdoll owns the bones; other bones keep their last pose
         // remove all previous external controllers from the scene graph
         for (auto it = mActiveControllers.begin(); it != mActiveControllers.end(); ++it)
         {
@@ -1899,6 +1901,110 @@ namespace MWRender
         if (nodepaths.empty())
             return std::nullopt;
         return osg::computeLocalToWorld(nodepaths[0]);
+    }
+
+    namespace
+    {
+        // Bones a ragdoll can use, in the order of MWPhysics::makeRagdoll
+        constexpr std::string_view sRagdollBones[] = { "Bip01 Pelvis", "Bip01 Spine", "Bip01 Spine1", "Bip01 Spine2",
+            "Bip01 Head", "Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand", "Bip01 R UpperArm",
+            "Bip01 R Forearm", "Bip01 R Hand", "Bip01 L Thigh", "Bip01 L Calf", "Bip01 L Foot", "Bip01 R Thigh",
+            "Bip01 R Calf", "Bip01 R Foot" };
+    }
+
+    std::vector<MWPhysics::RagdollBone> Animation::getRagdollBones() const
+    {
+        std::vector<MWPhysics::RagdollBone> bones;
+        if (!mObjectRoot)
+            return bones;
+        const NodeMap& nodes = getNodeMap();
+        for (std::string_view name : sRagdollBones)
+        {
+            auto found = nodes.find(name);
+            if (found == nodes.end())
+                continue;
+            const std::optional<osg::Matrixf> world = getBoneWorldTransform(name);
+            if (!world)
+                continue;
+            MWPhysics::RagdollBone bone{ found->second->getName(), {}, *world, *world };
+            // Nearest ancestor that is a ragdoll bone too
+            for (const osg::Node* parent = found->second->getNumParents() ? found->second->getParent(0) : nullptr;
+                 parent != nullptr && bone.mParent.empty();
+                 parent = parent->getNumParents() ? parent->getParent(0) : nullptr)
+                for (const MWPhysics::RagdollBone& other : bones)
+                    if (Misc::StringUtils::ciEqual(other.mName, parent->getName()))
+                        bone.mParent = other.mName;
+            bones.push_back(std::move(bone));
+        }
+        return bones;
+    }
+
+    RagdollBoneCallback* Animation::ragdollCallback(const std::string& bone)
+    {
+        if (auto found = mRagdollBones.find(bone); found != mRagdollBones.end())
+            return found->second.get();
+        auto node = getNodeMap().find(bone);
+        if (node == getNodeMap().end())
+            return nullptr;
+        if (!mRagdoll)
+        {
+            // First ragdoll bone: every animation stops, all bones keep their last pose
+            for (auto& [owner, callback] : mActiveControllers)
+                owner->removeUpdateCallback(callback);
+            mActiveControllers.clear();
+            mStates.clear();
+            mAccumCtrl = nullptr;
+            mRagdoll = true;
+        }
+        osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+        callback->setLocal(node->second->getMatrix());
+        node->second->setUpdateCallback(callback); // drops keyframe, blend and rotate controllers of this bone
+        mRagdollBones[bone] = callback;
+        return callback.get();
+    }
+
+    void Animation::setRagdollWorldPose(const std::vector<std::pair<std::string, osg::Matrixf>>& world)
+    {
+        for (const auto& [bone, matrix] : world)
+            if (RagdollBoneCallback* callback = ragdollCallback(bone))
+                callback->setWorld(matrix);
+    }
+
+    void Animation::setRagdollLocalPose(
+        const std::vector<std::pair<std::string, osg::Quat>>& local, const osg::Vec3f& pelvisLocalPos)
+    {
+        for (const auto& [bone, rotation] : local)
+        {
+            auto node = getNodeMap().find(bone);
+            if (node == getNodeMap().end())
+                continue;
+            osg::Vec3f translation, scale;
+            osg::Quat oldRotation, scaleOrientation;
+            node->second->getMatrix().decompose(translation, oldRotation, scale, scaleOrientation);
+            if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
+                translation = pelvisLocalPos;
+            if (RagdollBoneCallback* callback = ragdollCallback(bone))
+                callback->setLocal(osg::Matrixf::scale(scale) * osg::Matrixf::rotate(rotation)
+                    * osg::Matrixf::translate(translation));
+        }
+    }
+
+    std::vector<std::pair<std::string, osg::Quat>> Animation::getRagdollLocalPose(osg::Vec3f& pelvisLocalPos) const
+    {
+        std::vector<std::pair<std::string, osg::Quat>> pose;
+        for (const auto& [bone, callback] : mRagdollBones)
+        {
+            auto node = getNodeMap().find(bone);
+            if (node == getNodeMap().end())
+                continue;
+            osg::Vec3f translation, scale;
+            osg::Quat rotation, scaleOrientation;
+            node->second->getMatrix().decompose(translation, rotation, scale, scaleOrientation);
+            if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
+                pelvisLocalPos = translation;
+            pose.emplace_back(bone, rotation);
+        }
+        return pose;
     }
 
     bool Animation::hasBonePhysics(std::string_view bone) const
