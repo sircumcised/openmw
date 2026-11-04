@@ -145,6 +145,9 @@ namespace ESM
         // format 21 - Random state in saved games.
         REC_RAND = esm3Recname("RAND"), // Random state.
 
+        // NerevarMoon: ragdoll corpse poses in saved games (stock OpenMW skips the record)
+        REC_NMRD = esm3Recname("NMRD"),
+
         REC_ATTR = esm3Recname("ATTR"), // Attribute
 
         REC_AACT4 = esm4Recname(ESM4::REC_AACT), // Action

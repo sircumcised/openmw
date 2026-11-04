@@ -186,7 +186,7 @@ add_component_dir (esm3
     loadweap aipackage effectlist spelllist variant variantimp loadtes3 cellref filter
     savedgame journalentry queststate locals globalscript player objectstate cellid cellstate globalmap
     inventorystate containerstate npcstate creaturestate dialoguestate statstate npcstats creaturestats
-    weatherstate quickkeys fogstate spellstate activespells creaturelevliststate doorstate projectilestate debugprofile
+    weatherstate quickkeys fogstate spellstate activespells creaturelevliststate doorstate projectilestate ragdollstate debugprofile
     aisequence magiceffects custommarkerstate stolenitems transport animationstate controlsstate mappings readerscache
     infoorder timestamp formatversion landrecorddata selectiongroup dialoguecondition
     refnum actoridconverter

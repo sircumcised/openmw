@@ -5,6 +5,9 @@
 #include <osg/ref_ptr>
 
 #include <components/debug/debuglog.hpp>
+#include <components/esm3/ragdollstate.hpp>
+
+#include <map>
 #include <components/esm3/readerscache.hpp>
 #include <components/misc/rng.hpp>
 #include <components/settings/settings.hpp>
@@ -106,6 +109,11 @@ namespace MWWorld
         std::unique_ptr<MWWorld::WeatherManager> mWeatherManager;
         std::unique_ptr<MWWorld::DateTimeManager> mTimeManager;
         std::unique_ptr<ProjectileManager> mProjectileManager;
+
+        // NerevarMoon: ragdoll corpse poses by actor, kept across cell loads and saved as NMRD records
+        std::map<ESM::RefNum, ESM::RagdollState> mRagdollStates;
+        float mRagdollApplyTimer = 0.f;
+        void applyRagdollStates(float duration);
 
         bool mSky;
         bool mGodMode;
