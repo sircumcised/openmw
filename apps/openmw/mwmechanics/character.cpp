@@ -34,6 +34,7 @@
 #include <components/sceneutil/positionattitudetransform.hpp>
 
 #include "../mwrender/animation.hpp"
+#include "../mwrender/camera.hpp"
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
@@ -1897,6 +1898,15 @@ namespace MWMechanics
                 else
                     mAnimation->setPitchFactor(1.f - complete);
             }
+        }
+
+        // NerevarMoon Bodyview: the Static camera sits at the head bone, so the spine follows the look pitch
+        // always and arms, weapon and spells stay in view
+        if (mPtr == getPlayer())
+        {
+            const MWRender::Camera* camera = MWBase::Environment::get().getWorld()->getCamera();
+            if (camera->getMode() == MWRender::Camera::Mode::Static && camera->hasStaticHeadTracking())
+                mAnimation->setPitchFactor(1.f);
         }
 
         mAnimation->setAccurateAiming(mUpperBodyState > UpperBodyState::WeaponEquipped);
