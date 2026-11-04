@@ -107,9 +107,55 @@ namespace MWRender
         return offset;
     }
 
+    namespace
+    {
+        constexpr float sHeadReturnTime = 0.3f; // seconds from the head's view back to yaw/pitch
+    }
+
+    void Camera::setStaticHeadTracking(const std::optional<osg::Vec3f>& offset, bool followRotation)
+    {
+        followRotation = followRotation && offset.has_value();
+        if (followRotation && !mFollowHeadRotation)
+            mHeadDelta.reset();
+        else if (!followRotation && mFollowHeadRotation && mHeadDelta)
+            mHeadReturn = sHeadReturnTime;
+        mFollowHeadRotation = followRotation;
+        mStaticHeadOffset = offset;
+    }
+
+    std::optional<osg::Quat> Camera::calculateHeadRotation() const
+    {
+        if (!mAnimation)
+            return std::nullopt;
+        const osg::Node* head = mAnimation->getNode("Bip01 Head");
+        if (!head)
+            return std::nullopt;
+        osg::NodePathList nodepaths = head->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        return osg::computeLocalToWorld(nodepaths[0]).getRotate();
+    }
+
     void Camera::updateCamera(osg::Camera* cam)
     {
         osg::Quat orient = getOrient();
+        if (mMode == Mode::Static && mStaticHeadOffset && mFollowHeadRotation)
+        {
+            // NerevarMoon: ragdoll view; the head's turn from the moment this started turns the view
+            if (std::optional<osg::Quat> head = calculateHeadRotation())
+            {
+                if (!mHeadDelta)
+                    mHeadDelta = orient * head->inverse();
+                orient = *mHeadDelta * *head;
+                mLastHeadView = orient;
+            }
+        }
+        else if (mHeadReturn > 0.f)
+        {
+            osg::Quat back;
+            back.slerp(1.f - mHeadReturn / sHeadReturnTime, mLastHeadView, orient);
+            orient = back;
+        }
         osg::Vec3d forward = orient * osg::Vec3d(0, 1, 0);
         osg::Vec3d up = orient * osg::Vec3d(0, 0, 1);
 
@@ -149,7 +195,10 @@ namespace MWRender
         wm->showCrosshair(!wm->isGuiMode() && mShowCrosshair);
 
         if (!paused)
+        {
             updateFocalPointOffset(duration);
+            mHeadReturn = std::max(mHeadReturn - duration, 0.f);
+        }
         updatePosition();
     }
 

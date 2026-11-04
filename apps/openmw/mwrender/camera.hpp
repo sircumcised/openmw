@@ -97,8 +97,10 @@ namespace MWRender
         const osg::Vec3d& getPosition() const { return mPosition; }
         void setStaticPosition(const osg::Vec3d& pos);
         // NerevarMoon (Bodyview): in Static mode, place the camera at the tracked actor's head bone at render time
-        // plus an offset (x right, y forward along the camera yaw, z up); nullopt turns it off
-        void setStaticHeadTracking(const std::optional<osg::Vec3f>& offset) { mStaticHeadOffset = offset; }
+        // plus an offset (x right, y forward along the camera yaw, z up); nullopt turns it off. `followRotation`: the
+        // view also turns with the head bone (ragdoll), from the view it had when this started; back to yaw/pitch
+        // over 0.3 s when it ends
+        void setStaticHeadTracking(const std::optional<osg::Vec3f>& offset, bool followRotation = false);
         bool hasStaticHeadTracking() const { return mStaticHeadOffset.has_value(); }
 
         bool isVanityOrPreviewModeEnabled() const { return mMode == Mode::Vanity || mMode == Mode::Preview; }
@@ -152,6 +154,11 @@ namespace MWRender
         osg::Vec3f mFirstPersonOffset{ 0, 0, 0 };
         std::optional<osg::Vec3f> mStaticHeadOffset;
         std::optional<osg::Vec3d> calculateStaticHeadPosition() const;
+        bool mFollowHeadRotation = false;
+        std::optional<osg::Quat> mHeadDelta; // view = mHeadDelta * head rotation
+        osg::Quat mLastHeadView;
+        float mHeadReturn = 0.f; // seconds of the way back to yaw/pitch left
+        std::optional<osg::Quat> calculateHeadRotation() const;
 
         osg::Vec2d mFocalPointCurrentOffset;
         osg::Vec2d mFocalPointTargetOffset;

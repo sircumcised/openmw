@@ -53,8 +53,9 @@ namespace MWLua
         api["setStaticPosition"] = [camera](const osg::Vec3f& pos) { camera->setStaticPosition(pos); };
         // NerevarMoon: Static camera locked to the player's head bone at render time (Bodyview)
         api["staticHeadTracking"] = true;
-        api["setStaticHeadTracking"] = [camera](sol::optional<osg::Vec3f> offset) {
-            camera->setStaticHeadTracking(offset ? std::optional<osg::Vec3f>(*offset) : std::nullopt);
+        api["setStaticHeadTracking"] = [camera](sol::optional<osg::Vec3f> offset, sol::optional<bool> followRotation) {
+            camera->setStaticHeadTracking(
+                offset ? std::optional<osg::Vec3f>(*offset) : std::nullopt, followRotation.value_or(false));
         };
         api["setPitch"] = [camera](const FiniteFloat v) {
             camera->setPitch(-v, true);
