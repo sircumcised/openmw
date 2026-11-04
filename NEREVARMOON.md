@@ -28,3 +28,14 @@ additive: a stock OpenMW mod keeps working, a mod that uses these additions need
 - `mwrender/npcanimation.*`: `setHeadHidden`, re-applied in `addOrReplaceIndividualPart` and `rebuild`.
 - `mwrender/animation.*`: `getBoneWorldTransform`.
 - `mwlua/animationbindings.cpp`, `files/lua_api/openmw/animation.lua`: the bindings.
+
+## Jolt Physics (branch nm-jolt, sub-project 1 of the ragdoll work)
+
+- Jolt Physics v5.6.0 (MIT) fetched in `extern/CMakeLists.txt`, static, SSE4.2 only.
+- `apps/openmw/mwphysics/joltworld.*` and `joltshapes.*`: a Jolt world beside Bullet. Bullet keeps actors, rays,
+  projectiles and the navmesh. Jolt gets a copy of the loaded terrain and of the static World/Door objects
+  (converted from their Bullet shapes) and simulates dynamic bodies only.
+- `World::doPhysics` steps Jolt at 1/60 s after the actors and moves the simulated objects with `moveObject` and
+  `rotateObject`; a body that falls asleep becomes a normal object again.
+- `[Physics] jolt = true` (settings-default.cfg); false creates nothing.
+- Lua (global): `world.physicsAvailable`, `world.physicsSetDynamic(object, velocity|nil)`.

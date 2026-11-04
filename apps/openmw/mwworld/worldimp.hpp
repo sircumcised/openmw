@@ -375,6 +375,9 @@ namespace MWWorld
         void rotateObject(const Ptr& ptr, const osg::Vec3f& rot,
             MWBase::RotationFlags flags = MWBase::RotationFlag_inverseOrder) override;
 
+        bool physicsAvailable() const override;
+        bool setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity) override;
+
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;
         ///< Place an object. Makes a copy of the Ptr.

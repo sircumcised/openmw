@@ -1375,6 +1375,43 @@ namespace MWWorld
         mProjectileManager->processHits();
         mDiscardMovements = false;
         mPhysics->moveActors();
+
+        // NerevarMoon: Jolt dynamic bodies move their objects; settled ones become normal objects again
+        for (const MWPhysics::JoltWorld::Moved& moved : mPhysics->stepDynamics(duration))
+        {
+            const Ptr ptr = moveObject(moved.mPtr, moved.mPosition);
+            rotateObject(ptr, Misc::toEulerAnglesZYX(moved.mRotation), MWBase::RotationFlag_none);
+            if (moved.mSettled)
+                mPhysics->stopDynamic(ptr);
+        }
+    }
+
+    bool World::physicsAvailable() const
+    {
+        return mPhysics->getJolt() != nullptr;
+    }
+
+    bool World::setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity)
+    {
+        if (!velocity)
+        {
+            mPhysics->stopDynamic(ptr);
+            return true;
+        }
+        if (!physicsAvailable() || ptr.getClass().isActor() || !ptr.isInCell())
+            return false;
+        osg::Group* node = ptr.getRefData().getBaseNode() ? ptr.getRefData().getBaseNode()->asGroup() : nullptr;
+        if (!node)
+            return false;
+        // bounds in object space: the base node's own transform (position, rotation, scale) is left out
+        osg::ComputeBoundsVisitor computeBounds;
+        for (unsigned int i = 0; i < node->getNumChildren(); ++i)
+            node->getChild(i)->accept(computeBounds);
+        const osg::BoundingBox& box = computeBounds.getBoundingBox();
+        if (!box.valid())
+            return false;
+        const float scale = ptr.getCellRef().getScale();
+        return mPhysics->setDynamic(ptr, (box._max - box._min) * 0.5f * scale, box.center() * scale, *velocity);
     }
 
     void World::updateNavigator()

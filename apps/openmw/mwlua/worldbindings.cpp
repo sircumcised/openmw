@@ -1,6 +1,8 @@
 #include "worldbindings.hpp"
 
+#include <components/debug/debuglog.hpp>
 #include <components/esm3/loadacti.hpp>
+#include <components/settings/values.hpp>
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadarmo.hpp>
 #include <components/esm3/loadbook.hpp>
@@ -263,6 +265,20 @@ namespace MWLua
                     objPtr.getClass().activate(objPtr, actorPtr)->execute(actorPtr);
                 },
                 "_runStandardActivationAction");
+        };
+        // NerevarMoon: Jolt dynamic bodies
+        api["physicsAvailable"] = Settings::physics().mJolt.get(); // the world may not exist yet here
+        api["physicsSetDynamic"] = [context](const GObject& object, sol::optional<osg::Vec3f> velocity) {
+            std::optional<osg::Vec3f> v;
+            if (velocity)
+                v = *velocity;
+            context.mLuaManager->addAction(
+                [object, v] {
+                    const MWWorld::Ptr& ptr = object.ptr();
+                    if (!MWBase::Environment::get().getWorld()->setDynamic(ptr, v))
+                        Log(Debug::Warning) << "physicsSetDynamic: " << ptr.toString() << " cannot be simulated";
+                },
+                "physicsSetDynamic");
         };
         api["_runStandardUseAction"] = [context](const GObject& object, const GObject& actor, bool force) {
             context.mLuaManager->addAction(

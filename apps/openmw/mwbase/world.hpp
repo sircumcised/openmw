@@ -4,6 +4,7 @@
 #include "rotationflags.hpp"
 
 #include <deque>
+#include <optional>
 #include <set>
 #include <span>
 #include <string_view>
@@ -290,6 +291,12 @@ namespace MWBase
         virtual void rotateObject(
             const MWWorld::Ptr& ptr, const osg::Vec3f& rot, RotationFlags flags = RotationFlag_inverseOrder)
             = 0;
+
+        /// NerevarMoon: true when Jolt simulates dynamic bodies ([Physics] jolt)
+        virtual bool physicsAvailable() const = 0;
+        /// NerevarMoon: throws an object (not an actor) as a box of its visual bounds at `velocity` (units/s);
+        /// nullopt stops it where it is. False when it cannot be simulated.
+        virtual bool setDynamic(const MWWorld::Ptr& ptr, const std::optional<osg::Vec3f>& velocity) = 0;
 
         virtual MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos)

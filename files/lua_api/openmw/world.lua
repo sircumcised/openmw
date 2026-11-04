@@ -149,6 +149,18 @@
 -- @usage local obj = world.getObjectByFormId(core.getFormId('Morrowind.esm', 128964))
 
 ---
+-- NerevarMoon engine only: true when Jolt Physics simulates dynamic bodies (`[Physics] jolt` in settings.cfg).
+-- @field [parent=#world] #boolean physicsAvailable
+
+---
+-- NerevarMoon engine only: throw an object (not an actor) as a Jolt box of its visual bounds. It falls, bounces and
+-- comes to rest on the terrain and static objects, then becomes a normal object again. Runs at the end of the frame.
+-- @function [parent=#world] physicsSetDynamic
+-- @param openmw.core#GameObject object
+-- @param openmw.util#Vector3 velocity Initial velocity in game units per second; nil stops the object where it is.
+-- @usage world.physicsSetDynamic(obj, util.vector3(0, 0, 300))
+
+---
 -- Create a new instance of the given record.
 -- After creation the object is in the disabled state. Use :teleport to place to the world or :moveInto to put it into a container or an inventory.
 -- Note that dynamically created creatures, NPCs, and container inventories will not respawn.

@@ -20,6 +20,7 @@ on:
       - nerevarmoon
       - nm-vfxoffset
       - nm-bodyview
+      - nm-jolt
 
 jobs:
   Windows:

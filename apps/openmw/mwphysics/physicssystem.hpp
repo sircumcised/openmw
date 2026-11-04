@@ -21,6 +21,7 @@
 #include "../mwworld/ptr.hpp"
 
 #include "collisiontype.hpp"
+#include "joltworld.hpp"
 #include "raycasting.hpp"
 
 namespace osg
@@ -201,6 +202,17 @@ namespace MWPhysics
 
         /// Apply new positions to actors
         void moveActors();
+
+        // NerevarMoon: Jolt dynamic bodies (null without [Physics] jolt)
+        JoltWorld* getJolt() { return mJolt.get(); }
+        /// Box of the object's visual bounds (object space) thrown at `velocity`; false without Jolt or room
+        bool setDynamic(const MWWorld::Ptr& ptr, const osg::Vec3f& halfExtents, const osg::Vec3f& centre,
+            const osg::Vec3f& velocity);
+        /// Stops the simulation of `ptr` where it is and gives Jolt back its static copy
+        void stopDynamic(const MWWorld::Ptr& ptr);
+        /// Steps Jolt; the caller moves the objects (World::moveObject/rotateObject) and then calls stopDynamic
+        /// for the settled ones
+        std::vector<JoltWorld::Moved> stepDynamics(float dt);
         void debugDraw();
 
         std::vector<MWWorld::Ptr> getCollisions(const MWWorld::ConstPtr& ptr, int collisionGroup,
@@ -331,6 +343,9 @@ namespace MWPhysics
         std::unique_ptr<MWRender::DebugDrawer> mDebugDrawer;
 
         osg::ref_ptr<osg::Group> mParentNode;
+
+        std::unique_ptr<JoltWorld> mJolt; // NerevarMoon
+        void addJoltStatic(const MWWorld::Ptr& ptr, const osg::Quat& rotation);
 
         std::size_t mSimulationsCounter = 0;
         std::array<std::vector<Simulation>, 2> mSimulations;

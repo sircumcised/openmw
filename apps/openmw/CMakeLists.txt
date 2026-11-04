@@ -90,6 +90,7 @@ add_openmw_dir (mwphysics
     physicssystem trace collisiontype actor convert object heightfield closestnotmerayresultcallback
     contacttestresultcallback stepper movementsolver projectile
     actorconvexcallback raycasting mtphysics contacttestwrapper projectileconvexcallback
+    joltworld joltshapes
     )
 
 add_openmw_dir (mwclass
@@ -189,6 +190,7 @@ target_link_libraries(openmw-lib
     osg-ffmpeg-videoplayer
     oics
     components
+    Jolt # NerevarMoon: dynamic bodies
 )
 
 if (MSVC AND PRECOMPILE_HEADERS_WITH_MSVC)
