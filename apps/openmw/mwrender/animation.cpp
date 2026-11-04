@@ -1342,6 +1342,7 @@ namespace MWRender
 
     osg::Vec3f Animation::runAnimation(float duration)
     {
+        clearGetupBlends(true);
         osg::Vec3f movement(0.f, 0.f, 0.f);
         AnimStateMap::iterator stateiter = mStates.begin();
         while (stateiter != mStates.end())
@@ -1556,6 +1557,7 @@ namespace MWRender
         // A new skeleton: the old ragdoll callbacks belong to the old nodes (the next ragdoll pose re-creates them)
         mRagdollBones.clear();
         mRagdoll = false;
+        mGetupBlends.clear();
         osg::ref_ptr<osg::StateSet> previousStateset;
         if (mObjectRoot)
         {
@@ -1985,6 +1987,68 @@ namespace MWRender
         }
         mRagdollBones.clear();
         mRagdoll = false;
+        clearGetupBlends(false);
+    }
+
+    void Animation::clearGetupBlends(bool onlyDone)
+    {
+        std::erase_if(mGetupBlends, [&](const auto& entry) {
+            if (onlyDone && !entry.second->blendDone())
+                return false;
+            entry.first->removeUpdateCallback(entry.second);
+            return true;
+        });
+    }
+
+    float Animation::getupStart(std::string_view group) const
+    {
+        for (auto iter = mAnimSources.rbegin(); iter != mAnimSources.rend(); ++iter)
+        {
+            const SceneUtil::TextKeyMap& keys = (*iter)->getTextKeys();
+            const auto startKey = keys.findGroupStart(group);
+            if (startKey == keys.end())
+                continue;
+            const std::string stopName = std::string(group) + ": stop";
+            float stop = -1.f;
+            for (auto key = startKey; key != keys.end(); ++key)
+                if (Misc::StringUtils::ciEqual(key->second, stopName))
+                {
+                    stop = key->first;
+                    break;
+                }
+            const float start = startKey->first;
+            if (stop <= start)
+                return 0.6f;
+            for (const auto& [bone, controller] : (*iter)->mKeyframes->mKeyframeControllers)
+                if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
+                {
+                    const float t = findGetupStart(
+                        [&](float time) { return controller->getTranslation(time).z(); }, start, stop);
+                    return (t - start) / (stop - start);
+                }
+            return 0.6f;
+        }
+        return 0.6f;
+    }
+
+    void Animation::startGetup(std::string_view group, float startPoint, float blend)
+    {
+        std::vector<std::pair<std::string, osg::Matrixf>> poses;
+        for (const auto& [bone, callback] : mRagdollBones)
+            if (callback->relative())
+                poses.emplace_back(bone, *callback->relative());
+        clearRagdoll();
+        play(group, MWMechanics::Priority_Knockdown, BlendMask_All, false, 1.f, "start", "stop", startPoint, 0);
+        for (const auto& [bone, relative] : poses)
+        {
+            auto node = getNodeMap().find(bone);
+            if (node == getNodeMap().end())
+                continue;
+            osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+            callback->setBlend(relative, mInsert.get(), blend);
+            node->second->addUpdateCallback(callback);
+            mGetupBlends.emplace_back(node->second, callback);
+        }
     }
 
     bool Animation::hasBonePhysics(std::string_view bone) const

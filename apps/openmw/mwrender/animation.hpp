@@ -266,6 +266,9 @@ namespace MWRender
             Misc::StringUtils::CiEqual>
             mRagdollBones;
         RagdollBoneCallback* ragdollCallback(const std::string& bone);
+        // Getup: blend callbacks appended after the animation callbacks of the ragdoll bones
+        std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mGetupBlends;
+        void clearGetupBlends(bool onlyDone);
 
         const NodeMap& getNodeMap() const;
 
@@ -493,6 +496,13 @@ namespace MWRender
         /// Back to normal animation (resurrection, new skeleton).
         void clearRagdoll();
         bool isRagdoll() const { return mRagdoll; }
+        /// NerevarMoon getup. Point (0..1 between the group's start and stop keys) where `group` rises from the
+        /// ground: last low point of the Bip01 Pelvis track (see findGetupStart); 0.6 without a pelvis track.
+        float getupStart(std::string_view group) const;
+        /// Leaves ragdoll mode, plays `group` from `startPoint` with knockdown priority and blends every ragdoll bone
+        /// from its last physics pose into the animation over `blend` seconds.
+        void startGetup(std::string_view group, float startPoint, float blend);
+        bool isGettingUp() const { return !mGetupBlends.empty(); }
         void setPlayScriptedOnly(bool playScriptedOnly) { mPlayScriptedOnly = playScriptedOnly; }
 
         virtual bool useShieldAnimations() const { return false; }
