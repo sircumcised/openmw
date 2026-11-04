@@ -7,8 +7,12 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
+#include <osg/Matrixf>
 #include <osg/Quat>
 #include <osg/Vec3f>
 
@@ -21,6 +25,15 @@ namespace Resource
 
 namespace MWPhysics
 {
+    /// One skeleton bone handed to the ragdoll: world transforms now and one frame earlier (game units).
+    struct RagdollBone
+    {
+        std::string mName;
+        std::string mParent; // nearest ancestor that is itself a ragdoll bone; empty for the pelvis
+        osg::Matrixf mWorld;
+        osg::Matrixf mWorldPrev;
+    };
+
     class JoltWorld
     {
     public:
@@ -53,6 +66,28 @@ namespace MWPhysics
         /// Static copy and dynamic body of the object, when it has them.
         void remove(const MWWorld::Ptr& ptr);
         void updatePtr(const MWWorld::Ptr& old, const MWWorld::Ptr& updated);
+
+        /// Ragdoll pose after a step: world transform per ragdoll bone (game units).
+        struct RagdollPose
+        {
+            MWWorld::Ptr mPtr;
+            std::vector<std::pair<std::string, osg::Matrixf>> mWorld;
+            osg::Vec3f mLowest; // pelvis x/y, lowest bone z
+            bool mFrozen; // stopped or timed out: the bodies are gone, this pose is final
+            std::optional<float> mFallSpeed; // set once: speed (units/s) of the first hard landing of pelvis/chest
+        };
+
+        /// Bodies built from `bones` (see joltragdoll.cpp for the required ones), started at the bones' own
+        /// motion plus `impulse` (units/s) on the chest. False, with nothing created, when a required bone is missing.
+        bool addRagdoll(const MWWorld::Ptr& ptr, const std::vector<RagdollBone>& bones, float dt,
+            const osg::Vec3f& impulse, float massKg);
+        /// Adds `impulse` (units/s) to the named bone's body (chest when empty or unknown). False when not falling.
+        bool applyRagdollImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, std::string_view bone);
+        bool isRagdollActive(const MWWorld::Ptr& ptr) const;
+        /// Stops the fall now; the final pose comes out of takeRagdollPoses().
+        void freezeRagdoll(const MWWorld::Ptr& ptr);
+        /// Poses produced since the last call (each step, plus freezes).
+        std::vector<RagdollPose> takeRagdollPoses();
 
         /// Fixed 1/60 s steps, at most 4 per call. Returns the dynamic bodies that moved, with their new transforms.
         std::vector<Moved> step(float dt);

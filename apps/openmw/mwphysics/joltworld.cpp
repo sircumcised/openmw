@@ -20,12 +20,18 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <mutex>
 
+#include <osg/ref_ptr>
+
 #include <components/debug/debuglog.hpp>
+#include <components/misc/strings/algorithm.hpp>
 #include <components/resource/bulletshape.hpp>
 
+#include "joltragdoll.hpp"
 #include "joltshapes.hpp"
 
 namespace MWPhysics
@@ -36,6 +42,9 @@ namespace MWPhysics
         constexpr JPH::ObjectLayer sLayerMoving = 1;
         constexpr float sStep = 1.f / 60.f;
         constexpr int sMaxSteps = 4;
+        constexpr std::size_t sMaxRagdolls = 8;
+        constexpr float sRagdollTimeout = 6.f; // seconds before a fall is frozen anyway
+        constexpr float sLandingSpeed = 150.f; // units/s
 
         void trace(const char* format, ...)
         {
@@ -94,6 +103,19 @@ namespace MWPhysics
             JPH::BodyID mBody;
         };
 
+        struct Ragdoll
+        {
+            MWWorld::Ptr mPtr;
+            JPH::Ref<JPH::Ragdoll> mRagdoll;
+            std::vector<std::string> mNames;
+            std::vector<float> mScales;
+            int mChest = 0;
+            float mAge = 0.f;
+            float mFallSpeed = 0.f; // downward speed of pelvis/chest at the previous step
+            bool mLanded = false;
+            std::uint64_t mOrder = 0;
+        };
+
         // First member: the ones below allocate through JPH::Allocate, null until RegisterDefaultAllocator
         struct Init
         {
@@ -109,6 +131,9 @@ namespace MWPhysics
         std::map<std::pair<int, int>, JPH::BodyID> mTerrain;
         std::map<Key, Static> mStatics;
         std::map<Key, Dynamic> mDynamics;
+        std::map<Key, Ragdoll> mRagdolls;
+        std::vector<RagdollPose> mPoses;
+        std::uint64_t mRagdollCounter = 0;
         // One converted shape per collision mesh; the ref_ptr keeps the key's BulletShape alive
         std::map<const Resource::BulletShape*, std::pair<osg::ref_ptr<const Resource::BulletShape>, JPH::ShapeRefC>>
             mShapes;
@@ -177,6 +202,40 @@ namespace MWPhysics
             prune();
         }
 
+        RagdollPose poseOf(const Ragdoll& ragdoll, bool frozen)
+        {
+            RagdollPose pose{ ragdoll.mPtr, {}, osg::Vec3f(), frozen, std::nullopt };
+            float lowest = std::numeric_limits<float>::max();
+            for (std::size_t i = 0; i < ragdoll.mNames.size(); ++i)
+            {
+                const JPH::BodyID id = ragdoll.mRagdoll->GetBodyID(static_cast<int>(i));
+                const JPH::RVec3 p = bodies().GetPosition(id) * sJoltUnitsPerMetre;
+                const JPH::Quat q = bodies().GetRotation(id);
+                const osg::Vec3f t(
+                    static_cast<float>(p.GetX()), static_cast<float>(p.GetY()), static_cast<float>(p.GetZ()));
+                const float s = ragdoll.mScales[i];
+                pose.mWorld.emplace_back(ragdoll.mNames[i],
+                    osg::Matrixf::scale(s, s, s)
+                        * osg::Matrixf::rotate(osg::Quat(q.GetX(), q.GetY(), q.GetZ(), q.GetW()))
+                        * osg::Matrixf::translate(t));
+                lowest = std::min(lowest, t.z());
+                if (i == 0)
+                    pose.mLowest = t;
+            }
+            pose.mLowest.z() = lowest;
+            return pose;
+        }
+
+        void freezeRagdoll(Key key)
+        {
+            auto found = mRagdolls.find(key);
+            if (found == mRagdolls.end())
+                return;
+            mPoses.push_back(poseOf(found->second, true));
+            found->second.mRagdoll->RemoveFromPhysicsSystem();
+            mRagdolls.erase(found);
+        }
+
         void removeDynamic(Key key)
         {
             auto found = mDynamics.find(key);
@@ -196,6 +255,9 @@ namespace MWPhysics
     {
         Log(Debug::Info) << "Jolt: shapes converted " << mImpl->mShapeStats.mConverted << ", unsupported "
                          << mImpl->mShapeStats.mUnsupported << ", failed " << mImpl->mShapeStats.mFailed;
+        for (const auto& [key, ragdoll] : mImpl->mRagdolls)
+            ragdoll.mRagdoll->RemoveFromPhysicsSystem();
+        mImpl->mRagdolls.clear();
         for (const auto& [key, body] : mImpl->mDynamics)
             mImpl->destroy(body.mBody);
         for (const auto& [key, body] : mImpl->mStatics)
@@ -297,8 +359,85 @@ namespace MWPhysics
         return mImpl->mDynamics.count(ptr.mRef) > 0;
     }
 
+    bool JoltWorld::addRagdoll(const MWWorld::Ptr& ptr, const std::vector<RagdollBone>& bones, float dt,
+        const osg::Vec3f& impulse, float massKg)
+    {
+        mImpl->freezeRagdoll(ptr.mRef);
+        RagdollBuild build = makeRagdoll(bones, massKg, sLayerMoving);
+        if (build.mSettings == nullptr)
+            return false;
+        if (mImpl->mRagdolls.size() >= sMaxRagdolls)
+        {
+            auto oldest = std::min_element(mImpl->mRagdolls.begin(), mImpl->mRagdolls.end(),
+                [](const auto& l, const auto& r) { return l.second.mOrder < r.second.mOrder; });
+            mImpl->freezeRagdoll(oldest->first);
+        }
+        JPH::Ref<JPH::Ragdoll> ragdoll = build.mSettings->CreateRagdoll(
+            static_cast<JPH::CollisionGroup::GroupID>(++mImpl->mRagdollCounter), 0, &mImpl->mSystem);
+        if (ragdoll == nullptr)
+            return false;
+        ragdoll->AddToPhysicsSystem(JPH::EActivation::Activate);
+
+        // Start with the bones' own motion; the blow lands on the chest
+        const float invDt = dt > 1e-4f ? 1.f / dt : 0.f;
+        for (std::size_t i = 0; i < build.mNames.size(); ++i)
+        {
+            osg::Vec3f velocity;
+            for (const RagdollBone& bone : bones)
+                if (Misc::StringUtils::ciEqual(bone.mName, build.mNames[i]))
+                    velocity = (bone.mWorld.getTrans() - bone.mWorldPrev.getTrans()) * invDt;
+            if (velocity.length() > 1000.f)
+                velocity *= 1000.f / velocity.length();
+            if (static_cast<int>(i) == build.mChest)
+                velocity += impulse;
+            mImpl->bodies().SetLinearVelocity(ragdoll->GetBodyID(static_cast<int>(i)),
+                JPH::Vec3(velocity.x(), velocity.y(), velocity.z()) / sJoltUnitsPerMetre);
+        }
+
+        Impl::Ragdoll& entry = mImpl->mRagdolls[ptr.mRef];
+        entry.mPtr = ptr;
+        entry.mRagdoll = ragdoll;
+        entry.mNames = std::move(build.mNames);
+        entry.mScales = std::move(build.mScales);
+        entry.mChest = build.mChest;
+        entry.mOrder = mImpl->mRagdollCounter;
+        return true;
+    }
+
+    bool JoltWorld::applyRagdollImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, std::string_view bone)
+    {
+        auto found = mImpl->mRagdolls.find(ptr.mRef);
+        if (found == mImpl->mRagdolls.end())
+            return false;
+        Impl::Ragdoll& ragdoll = found->second;
+        int index = ragdoll.mChest;
+        for (std::size_t i = 0; i < ragdoll.mNames.size(); ++i)
+            if (!bone.empty() && Misc::StringUtils::ciEqual(ragdoll.mNames[i], bone))
+                index = static_cast<int>(i);
+        mImpl->bodies().AddLinearVelocity(ragdoll.mRagdoll->GetBodyID(index),
+            JPH::Vec3(impulse.x(), impulse.y(), impulse.z()) / sJoltUnitsPerMetre);
+        ragdoll.mAge = 0.f;
+        return true;
+    }
+
+    bool JoltWorld::isRagdollActive(const MWWorld::Ptr& ptr) const
+    {
+        return mImpl->mRagdolls.count(ptr.mRef) > 0;
+    }
+
+    void JoltWorld::freezeRagdoll(const MWWorld::Ptr& ptr)
+    {
+        mImpl->freezeRagdoll(ptr.mRef);
+    }
+
+    std::vector<JoltWorld::RagdollPose> JoltWorld::takeRagdollPoses()
+    {
+        return std::exchange(mImpl->mPoses, {});
+    }
+
     void JoltWorld::remove(const MWWorld::Ptr& ptr)
     {
+        mImpl->freezeRagdoll(ptr.mRef);
         mImpl->removeStatic(ptr.mRef);
         mImpl->removeDynamic(ptr.mRef);
     }
@@ -323,12 +462,21 @@ namespace MWPhysics
             mImpl->mDynamics.erase(found);
             mImpl->mDynamics[updated.mRef] = Impl::Dynamic{ updated, id };
         }
+        if (auto found = mImpl->mRagdolls.find(old.mRef); found != mImpl->mRagdolls.end())
+        {
+            Impl::Ragdoll ragdoll = std::move(found->second);
+            mImpl->mRagdolls.erase(found);
+            ragdoll.mPtr = updated;
+            mImpl->mRagdolls[updated.mRef] = std::move(ragdoll);
+        }
+        else if (auto same = mImpl->mRagdolls.find(updated.mRef); same != mImpl->mRagdolls.end())
+            same->second.mPtr = updated;
     }
 
     std::vector<JoltWorld::Moved> JoltWorld::step(float dt)
     {
         std::vector<Moved> moved;
-        if (mImpl->mDynamics.empty())
+        if (mImpl->mDynamics.empty() && mImpl->mRagdolls.empty())
         {
             mImpl->mTimeAccum = 0.f;
             return moved;
@@ -352,6 +500,30 @@ namespace MWPhysics
             return moved;
 
         JPH::BodyInterface& bodies = mImpl->bodies();
+        std::vector<Impl::Key> stopped;
+        for (auto& [key, ragdoll] : mImpl->mRagdolls)
+        {
+            ragdoll.mAge += steps * sStep;
+            RagdollPose pose = mImpl->poseOf(ragdoll, false);
+            // First hard landing: the downward speed of pelvis or chest collapses
+            float down = 0.f;
+            for (int i : { 0, ragdoll.mChest })
+                down = std::max(down,
+                    -bodies.GetLinearVelocity(ragdoll.mRagdoll->GetBodyID(i)).GetZ() * sJoltUnitsPerMetre);
+            if (!ragdoll.mLanded && ragdoll.mFallSpeed > sLandingSpeed && down < ragdoll.mFallSpeed * 0.4f)
+            {
+                ragdoll.mLanded = true;
+                pose.mFallSpeed = ragdoll.mFallSpeed;
+            }
+            ragdoll.mFallSpeed = down;
+            if (!ragdoll.mRagdoll->IsActive() || ragdoll.mAge >= sRagdollTimeout)
+                stopped.push_back(key);
+            else
+                mImpl->mPoses.push_back(std::move(pose));
+        }
+        for (Impl::Key key : stopped)
+            mImpl->freezeRagdoll(key);
+
         std::vector<Impl::Key> settled;
         moved.reserve(mImpl->mDynamics.size());
         for (const auto& [key, body] : mImpl->mDynamics)
