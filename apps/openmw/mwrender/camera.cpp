@@ -112,8 +112,12 @@ namespace MWRender
         constexpr float sHeadReturnTime = 0.3f; // seconds from the head's view back to yaw/pitch
     }
 
-    void Camera::setStaticHeadTracking(const std::optional<osg::Vec3f>& offset, bool followRotation)
+    void Camera::setStaticHeadTracking(
+        const std::optional<osg::Vec3f>& offset, bool followRotation, float stabilization)
     {
+        mHeadStabilization = std::clamp(stabilization, 0.f, 1.f);
+        if (!offset)
+            mHeadOffsetFiltered.reset();
         followRotation = followRotation && offset.has_value();
         if (followRotation && !mFollowHeadRotation)
             mHeadDelta.reset();
@@ -198,6 +202,19 @@ namespace MWRender
         {
             updateFocalPointOffset(duration);
             mHeadReturn = std::max(mHeadReturn - duration, 0.f);
+            // low pass of the head relative to the body, 0.1 s; a jump over 50 units (teleport, fall) snaps
+            const std::optional<osg::Vec3d> bone = calculateHeadBonePosition();
+            const std::optional<osg::Vec3d> body = trackedActorPosition();
+            if (mStaticHeadOffset && mHeadStabilization > 0.f && bone && body)
+            {
+                const osg::Vec3d raw = *bone - *body;
+                if (!mHeadOffsetFiltered || (raw - *mHeadOffsetFiltered).length() > 50.0)
+                    mHeadOffsetFiltered = raw;
+                else
+                    *mHeadOffsetFiltered += (raw - *mHeadOffsetFiltered) * (1.0 - std::exp(-duration / 0.1));
+            }
+            else
+                mHeadOffsetFiltered.reset();
         }
         updatePosition();
     }
@@ -213,9 +230,9 @@ namespace MWRender
         return res;
     }
 
-    std::optional<osg::Vec3d> Camera::calculateStaticHeadPosition() const
+    std::optional<osg::Vec3d> Camera::calculateHeadBonePosition() const
     {
-        if (!mAnimation || !mStaticHeadOffset)
+        if (!mAnimation)
             return std::nullopt;
         const osg::Node* head = mAnimation->getNode("Bip01 Head");
         if (!head)
@@ -223,7 +240,31 @@ namespace MWRender
         osg::NodePathList nodepaths = head->getParentalNodePaths();
         if (nodepaths.empty())
             return std::nullopt;
-        osg::Vec3d res = osg::computeLocalToWorld(nodepaths[0]).getTrans();
+        return osg::computeLocalToWorld(nodepaths[0]).getTrans();
+    }
+
+    std::optional<osg::Vec3d> Camera::trackedActorPosition() const
+    {
+        if (mTrackingPtr.isEmpty())
+            return std::nullopt;
+        return osg::Vec3d(mTrackingPtr.getRefData().getPosition().asVec3());
+    }
+
+    std::optional<osg::Vec3d> Camera::calculateStaticHeadPosition() const
+    {
+        if (!mStaticHeadOffset)
+            return std::nullopt;
+        std::optional<osg::Vec3d> bone = calculateHeadBonePosition();
+        if (!bone)
+            return std::nullopt;
+        osg::Vec3d res = *bone;
+        // NerevarMoon: part of the walk and run sway of the head is filtered out (never for a ragdoll)
+        const std::optional<osg::Vec3d> body = trackedActorPosition();
+        if (mHeadStabilization > 0.f && !mFollowHeadRotation && mHeadOffsetFiltered && body)
+        {
+            const osg::Vec3d raw = res - *body;
+            res = *body + *mHeadOffsetFiltered * mHeadStabilization + raw * (1.0 - mHeadStabilization);
+        }
         const osg::Vec3f& off = *mStaticHeadOffset;
         osg::Vec2f horizontalOffset = Misc::rotateVec2f(osg::Vec2f(off.x(), off.y()), mYaw);
         res.x() += horizontalOffset.x();

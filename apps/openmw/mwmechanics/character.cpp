@@ -2002,6 +2002,16 @@ namespace MWMechanics
 
         bool isPlayer = mPtr == MWMechanics::getPlayer();
         bool isFirstPersonPlayer = isPlayer && MWBase::Environment::get().getWorld()->isFirstPerson();
+        // NerevarMoon Bodyview (Static camera at the head bone): the player moves as in first person, with no turn to
+        // the movement direction, no slowdown in turns and no turning delay that would swing the head and the camera
+        // (turning animations in place stay: the feet step)
+        bool firstPersonMovement = isFirstPersonPlayer;
+        if (isPlayer && !isFirstPersonPlayer)
+        {
+            const MWRender::Camera* camera = MWBase::Environment::get().getWorld()->getCamera();
+            firstPersonMovement
+                = camera->getMode() == MWRender::Camera::Mode::Static && camera->hasStaticHeadTracking();
+        }
         bool godmode = isPlayer && MWBase::Environment::get().getWorld()->getGodModeState();
 
         float scale = mPtr.getCellRef().getScale();
@@ -2065,7 +2075,7 @@ namespace MWMechanics
                 float deltaLen = delta.length();
 
                 float maxDelta;
-                if (isFirstPersonPlayer)
+                if (firstPersonMovement)
                     maxDelta = 1;
                 else if (std::abs(speedDelta) < deltaLen / 2)
                     // Turning is smooth for player and less smooth for NPCs (otherwise NPC can miss a path point).
@@ -2105,7 +2115,7 @@ namespace MWMechanics
             bool canMove = cls.getMaxSpeed(mPtr) > 0;
             const bool turnToMovementDirection = Settings::game().mTurnToMovementDirection;
             const bool isBiped = mPtr.getClass().isBipedal(mPtr);
-            if (!isBiped || !turnToMovementDirection || isFirstPersonPlayer)
+            if (!isBiped || !turnToMovementDirection || firstPersonMovement)
             {
                 movementSettings.mIsStrafing = std::abs(vec.x()) > std::abs(vec.y()) * 2;
                 stats.setSideMovementAngle(0);
