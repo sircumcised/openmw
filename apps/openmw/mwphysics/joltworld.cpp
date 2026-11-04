@@ -94,6 +94,11 @@ namespace MWPhysics
             JPH::BodyID mBody;
         };
 
+        // First member: the ones below allocate through JPH::Allocate, null until RegisterDefaultAllocator
+        struct Init
+        {
+            Init() { initJolt(); }
+        } mInit;
         JPH::BroadPhaseLayerInterfaceTable mBroadPhaseLayers{ 2, 2 };
         JPH::ObjectLayerPairFilterTable mPairFilter{ 2 };
         std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilterTable> mObjectVsBroadPhase;
@@ -114,7 +119,6 @@ namespace MWPhysics
 
         Impl()
         {
-            initJolt();
             mBroadPhaseLayers.MapObjectToBroadPhaseLayer(sLayerStatic, JPH::BroadPhaseLayer(0));
             mBroadPhaseLayers.MapObjectToBroadPhaseLayer(sLayerMoving, JPH::BroadPhaseLayer(1));
             mPairFilter.EnableCollision(sLayerMoving, sLayerStatic);
