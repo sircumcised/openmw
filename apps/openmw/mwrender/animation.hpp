@@ -278,7 +278,12 @@ namespace MWRender
         std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mLowerBodyHolds;
         std::unordered_map<std::string, float, Misc::StringUtils::CiHash, Misc::StringUtils::CiEqual> mBoneScales;
         RagdollBoneCallback* holdBone(std::string_view bone, float scale);
-        void attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld, Piece piece, bool crushed);
+        /// Cap on `boneNode` facing `outwardWorld`; `boneWorldRotation` is passed in because a clone's bones are not
+        /// in the scene yet. Named NM_Cap_body_<piece> (actor side) or NM_Cap_piece_<piece> (the flying piece).
+        osg::ref_ptr<osg::Node> attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld,
+            const osg::Quat& boneWorldRotation, Piece piece, bool crushed, bool bodySide);
+        std::vector<std::pair<Piece, osg::ref_ptr<osg::Node>>> mBodyCaps;
+        osg::Quat boneWorldRotation(std::string_view bone) const;
 
         const NodeMap& getNodeMap() const;
 

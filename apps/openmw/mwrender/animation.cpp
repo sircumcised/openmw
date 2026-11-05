@@ -2068,12 +2068,10 @@ namespace MWRender
         const float boneScale = rootWorld.getScale().x();
         const float radius = capRadiusMetres(pieceCap(piece)) * 70.f * std::max(boneScale, 0.1f);
         osg::Vec3f start = rootWorld.getTrans(), end = start;
-        for (auto it = bones.rbegin(); it != bones.rend(); ++it)
-            if (auto found = getNodeMap().find(*it); found != getNodeMap().end() && found->second != root->second)
-            {
+        // the axis runs from the cut bone to the piece's end bone (the torso: up to the head, not to a hand)
+        if (const std::string_view endBone = pieceEndBone(piece); !endBone.empty())
+            if (auto found = getNodeMap().find(endBone); found != getNodeMap().end() && found->second != root->second)
                 end = worldMatrixOf(found->second).getTrans();
-                break;
-            }
         osg::Vec3f axis = end - start;
         if (axis.length() < radius)
         {
@@ -2093,11 +2091,18 @@ namespace MWRender
         return true;
     }
 
-    void Animation::attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld, Piece piece, bool crushed)
+    osg::Quat Animation::boneWorldRotation(std::string_view bone) const
+    {
+        auto node = getNodeMap().find(bone);
+        return node == getNodeMap().end() ? osg::Quat() : worldMatrixOf(node->second).getRotate();
+    }
+
+    osg::ref_ptr<osg::Node> Animation::attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld,
+        const osg::Quat& boneRotation, Piece piece, bool crushed, bool bodySide)
     {
         osg::Group* bone = boneNode ? boneNode->asGroup() : nullptr;
         if (bone == nullptr)
-            return;
+            return nullptr;
         std::string model = "meshes/nm/dismember/cap_" + std::string(pieceCap(piece)) + (crushed ? "_crushed" : "") + ".nif";
         osg::ref_ptr<osg::Node> cap;
         try
@@ -2107,22 +2112,30 @@ namespace MWRender
         catch (const std::exception& e)
         {
             Log(Debug::Warning) << "[dismember] no cap " << model << ": " << e.what();
-            return;
+            return nullptr;
         }
         // cap +y along `outwardWorld`, rim radius scaled to the bone in world units
         // the bone's own world scale (actor and race size) applies on top of the holder's
-        const osg::Matrixf boneWorld = worldMatrixOf(bone);
         const float radius = capRadiusMetres(pieceCap(piece)) * 70.f * 1.15f;
         osg::Quat toOutward;
         toOutward.makeRotate(osg::Vec3f(0.f, 1.f, 0.f), outwardWorld);
         // row vectors: v * local * boneRotation = v * toOutward
         const osg::Matrixf local
-            = osg::Matrixf::rotate(toOutward) * osg::Matrixf::inverse(osg::Matrixf::rotate(boneWorld.getRotate()));
+            = osg::Matrixf::rotate(toOutward) * osg::Matrixf::inverse(osg::Matrixf::rotate(boneRotation));
         osg::ref_ptr<osg::MatrixTransform> holder
             = new osg::MatrixTransform(osg::Matrixf::scale(radius, radius, radius) * local);
-        holder->setName("NM_Cap");
+        holder->setName(std::string(bodySide ? "NM_Cap_body_" : "NM_Cap_piece_") + std::string(pieceName(piece)));
         holder->addChild(cap);
         bone->addChild(holder);
+        if (bodySide)
+        {
+            // a bigger cut takes the smaller pieces' stumps with it
+            for (const auto& [smaller, node] : mBodyCaps)
+                if (smaller != piece && pieceContains(piece, smaller))
+                    node->setNodeMask(0);
+            mBodyCaps.emplace_back(piece, holder);
+        }
+        return holder;
     }
 
     std::optional<Animation::SeverResult> Animation::sever(Piece piece, bool crushed, bool makeClone)
@@ -2137,7 +2150,8 @@ namespace MWRender
         holdBone("Bip01 Head", 0.001f);
         mSevered.push_back(piece);
         if (auto neck = getNodeMap().find("Bip01 Neck"); neck != getNodeMap().end())
-            attachCap(neck->second, result.mRotation * osg::Vec3f(0.f, 1.f, 0.f), piece, crushed);
+            attachCap(neck->second, result.mRotation * osg::Vec3f(0.f, 1.f, 0.f), boneWorldRotation("Bip01 Neck"), piece,
+                crushed, true);
         return result;
     }
 

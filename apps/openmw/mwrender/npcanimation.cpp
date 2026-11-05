@@ -19,6 +19,7 @@
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/scenemanager.hpp>
 #include <components/sceneutil/clone.hpp>
+#include <components/sceneutil/skeleton.hpp>
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/keyframe.hpp>
 #include <components/sceneutil/lightcommon.hpp>
@@ -526,7 +527,7 @@ namespace MWRender
         // the stump: cap at the cut, the cut bone held still so the cap does not swing with attacks
         if (auto bone = getNodeMap().find(rootBone); bone != getNodeMap().end())
         {
-            attachCap(bone->second, outward, piece, crushed);
+            attachCap(bone->second, outward, boneWorldRotation(rootBone), piece, crushed, true);
             holdBone(rootBone, 1.f);
         }
         return result;
@@ -550,23 +551,42 @@ namespace MWRender
         osg::ref_ptr<osg::Node> clone = osg::clone(mObjectRoot.get(), SceneUtil::CopyOp());
         std::unordered_map<const osg::Node*, osg::Node*> pairs;
         pairNodes(mObjectRoot.get(), clone.get(), pairs);
+        // parts outside the piece leave the clone (memory); the piece's own parts show
         for (int i = 0; i < ESM::PRT_Count; ++i)
         {
             if (!mObjectParts[i])
                 continue;
             auto found = pairs.find(mObjectParts[i]->getNode().get());
-            if (found != pairs.end())
-                found->second->setNodeMask((own & (1u << i)) ? ~0u : 0u);
+            if (found == pairs.end())
+                continue;
+            if (own & (1u << i))
+                found->second->setNodeMask(~0u);
+            else
+                for (osg::Group* parent : std::vector<osg::Group*>(found->second->getParents()))
+                    parent->removeChild(found->second);
         }
         ClearUpdateCallbacks clear;
         clone->accept(clear);
-        // the actor's own stump caps came along with the copy: they belong to the body side only
+        // stumps copied with the actor: only those of smaller pieces cut before, inside this one, stay on it
         for (const auto& [original, copy] : pairs)
-            if (original->getName() == "NM_Cap")
-                copy->setNodeMask(0);
-        if (auto bone = getNodeMap().find(pieceBones(piece).front()); bone != getNodeMap().end())
+        {
+            const std::string& name = original->getName();
+            if (name.rfind("NM_Cap_", 0) != 0)
+                continue;
+            const std::string_view prefix = "NM_Cap_body_";
+            const std::optional<Piece> other
+                = name.rfind(prefix, 0) == 0 ? parsePiece(std::string_view(name).substr(prefix.size())) : std::nullopt;
+            copy->setNodeMask(other && *other != piece && pieceContains(piece, *other) ? ~0u : 0u);
+        }
+        const std::string_view rootBone = pieceBones(piece).front();
+        if (auto bone = getNodeMap().find(rootBone); bone != getNodeMap().end())
             if (auto copy = pairs.find(bone->second.get()); copy != pairs.end())
-                attachCap(copy->second, -(geometry.mRotation * osg::Vec3f(0.f, 1.f, 0.f)), piece, crushed);
+                attachCap(copy->second, -(geometry.mRotation * osg::Vec3f(0.f, 1.f, 0.f)), boneWorldRotation(rootBone),
+                    piece, crushed, false);
+        // frozen: skinned once, then never again
+        for (const auto& [original, copy] : pairs)
+            if (auto* skeleton = dynamic_cast<SceneUtil::Skeleton*>(copy))
+                skeleton->setActive(SceneUtil::Skeleton::Inactive);
         return clone;
     }
 

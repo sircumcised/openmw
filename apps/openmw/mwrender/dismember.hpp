@@ -32,6 +32,10 @@ namespace MWRender
     std::string_view pieceName(Piece piece);
     /// Bip01 bones of the piece, the cut bone first.
     const std::vector<std::string_view>& pieceBones(Piece piece);
+    /// The far bone that, with the cut bone, sets the piece's axis; empty for a one-bone piece (head, hand).
+    std::string_view pieceEndBone(Piece piece);
+    /// `outer` holds `inner` (an arm holds its hand, the torso the head): inner's cut bone is one of outer's.
+    bool pieceContains(Piece outer, Piece inner);
     /// Stump cap: neck, wrist, elbow, shoulder, knee, hip or waist.
     std::string_view pieceCap(Piece piece);
     /// Body part slots of the piece, bit i = ESM::PRT_* value i.

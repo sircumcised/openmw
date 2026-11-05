@@ -49,31 +49,36 @@ namespace MWRender
             std::string_view mCap;
             std::vector<std::string_view> mBones;
             std::uint32_t mParts;
+            std::string_view mEnd;
         };
 
         const std::array<Def, static_cast<int>(Piece::Count)>& defs()
         {
             static const std::array<Def, static_cast<int>(Piece::Count)> table = { {
-                { "head", "neck", { "Bip01 Head" }, bits({ Head, Hair }) },
-                { "rhand", "wrist", { "Bip01 R Hand" }, bits({ RHand }) },
-                { "lhand", "wrist", { "Bip01 L Hand" }, bits({ LHand }) },
-                { "rforearm", "elbow", { "Bip01 R Forearm", "Bip01 R Hand" }, bits({ RHand, RWrist, RForearm }) },
-                { "lforearm", "elbow", { "Bip01 L Forearm", "Bip01 L Hand" }, bits({ LHand, LWrist, LForearm }) },
+                // the weapon goes with the right hand, the shield or torch with the left
+                { "head", "neck", { "Bip01 Head" }, bits({ Head, Hair }), "" },
+                { "rhand", "wrist", { "Bip01 R Hand" }, bits({ RHand, Weapon }), "" },
+                { "lhand", "wrist", { "Bip01 L Hand" }, bits({ LHand, Shield }), "" },
+                { "rforearm", "elbow", { "Bip01 R Forearm", "Bip01 R Hand" }, bits({ RHand, RWrist, RForearm, Weapon }),
+                    "Bip01 R Hand" },
+                { "lforearm", "elbow", { "Bip01 L Forearm", "Bip01 L Hand" }, bits({ LHand, LWrist, LForearm, Shield }),
+                    "Bip01 L Hand" },
                 { "rarm", "shoulder", { "Bip01 R UpperArm", "Bip01 R Forearm", "Bip01 R Hand" },
-                    bits({ RHand, RWrist, RForearm, RUpperarm }) },
+                    bits({ RHand, RWrist, RForearm, RUpperarm, Weapon }), "Bip01 R Hand" },
                 { "larm", "shoulder", { "Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand" },
-                    bits({ LHand, LWrist, LForearm, LUpperarm }) },
-                { "rshin", "knee", { "Bip01 R Calf", "Bip01 R Foot" }, bits({ RFoot, RAnkle, RKnee }) },
-                { "lshin", "knee", { "Bip01 L Calf", "Bip01 L Foot" }, bits({ LFoot, LAnkle, LKnee }) },
+                    bits({ LHand, LWrist, LForearm, LUpperarm, Shield }), "Bip01 L Hand" },
+                { "rshin", "knee", { "Bip01 R Calf", "Bip01 R Foot" }, bits({ RFoot, RAnkle, RKnee }), "Bip01 R Foot" },
+                { "lshin", "knee", { "Bip01 L Calf", "Bip01 L Foot" }, bits({ LFoot, LAnkle, LKnee }), "Bip01 L Foot" },
                 { "rleg", "hip", { "Bip01 R Thigh", "Bip01 R Calf", "Bip01 R Foot" },
-                    bits({ RFoot, RAnkle, RKnee, RLeg }) },
+                    bits({ RFoot, RAnkle, RKnee, RLeg }), "Bip01 R Foot" },
                 { "lleg", "hip", { "Bip01 L Thigh", "Bip01 L Calf", "Bip01 L Foot" },
-                    bits({ LFoot, LAnkle, LKnee, LLeg }) },
+                    bits({ LFoot, LAnkle, LKnee, LLeg }), "Bip01 L Foot" },
                 { "torso", "waist",
                     { "Bip01 Spine", "Bip01 Spine1", "Bip01 Spine2", "Bip01 Neck", "Bip01 Head", "Bip01 L UpperArm",
                         "Bip01 L Forearm", "Bip01 L Hand", "Bip01 R UpperArm", "Bip01 R Forearm", "Bip01 R Hand" },
                     bits({ Head, Hair, Neck, Cuirass, RHand, LHand, RWrist, LWrist, Shield, RForearm, LForearm,
-                        RUpperarm, LUpperarm, RPauldron, LPauldron, Weapon }) },
+                        RUpperarm, LUpperarm, RPauldron, LPauldron, Weapon }),
+                    "Bip01 Head" },
             } };
             return table;
         }
@@ -100,6 +105,20 @@ namespace MWRender
     const std::vector<std::string_view>& pieceBones(Piece piece)
     {
         return def(piece).mBones;
+    }
+
+    std::string_view pieceEndBone(Piece piece)
+    {
+        return def(piece).mEnd;
+    }
+
+    bool pieceContains(Piece outer, Piece inner)
+    {
+        const std::string_view root = def(inner).mBones.front();
+        for (std::string_view bone : def(outer).mBones)
+            if (bone == root)
+                return true;
+        return false;
     }
 
     std::string_view pieceCap(Piece piece)
