@@ -18,6 +18,7 @@
 #include <components/esm3/loadrace.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/scenemanager.hpp>
+#include <components/sceneutil/clone.hpp>
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/keyframe.hpp>
 #include <components/sceneutil/lightcommon.hpp>
@@ -466,6 +467,92 @@ namespace MWRender
             node->setNodeMask(mHeadPartMasks[type]);
     }
 
+    static_assert(ESM::PRT_Head == 0 && ESM::PRT_Hair == 1 && ESM::PRT_Cuirass == 3 && ESM::PRT_RHand == 6
+            && ESM::PRT_Shield == 10 && ESM::PRT_RForearm == 11 && ESM::PRT_RUpperarm == 13 && ESM::PRT_RFoot == 15
+            && ESM::PRT_RKnee == 19 && ESM::PRT_RLeg == 21 && ESM::PRT_RPauldron == 23 && ESM::PRT_Weapon == 25,
+        "dismember.cpp mirrors the ESM::PRT_* values");
+
+    void NpcAnimation::applySevered(ESM::PartReferenceType type)
+    {
+        if (!(hiddenParts(mSevered) & (1u << type)) || !mObjectParts[type])
+            return;
+        mObjectParts[type]->getNode()->setNodeMask(0);
+    }
+
+    namespace
+    {
+        // same scene graph shape on both sides (a clone): original node -> clone node
+        void pairNodes(osg::Node* original, osg::Node* copy, std::unordered_map<const osg::Node*, osg::Node*>& pairs)
+        {
+            pairs[original] = copy;
+            osg::Group* a = original->asGroup();
+            osg::Group* b = copy->asGroup();
+            if (a == nullptr || b == nullptr || a->getNumChildren() != b->getNumChildren())
+                return;
+            for (unsigned int i = 0; i < a->getNumChildren(); ++i)
+                pairNodes(a->getChild(i), b->getChild(i), pairs);
+        }
+
+        class ClearUpdateCallbacks : public osg::NodeVisitor
+        {
+        public:
+            ClearUpdateCallbacks()
+                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
+            {
+            }
+            void apply(osg::Node& node) override
+            {
+                node.setUpdateCallback(nullptr);
+                traverse(node);
+            }
+        };
+    }
+
+    std::optional<Animation::SeverResult> NpcAnimation::sever(Piece piece, bool crushed, bool makeClone)
+    {
+        if (!mObjectRoot || !canSever(piece, mSevered))
+            return std::nullopt;
+        SeverResult result;
+        if (!fillSeverGeometry(piece, result))
+            return std::nullopt;
+        const std::string_view rootBone = pieceBones(piece).front();
+        const osg::Vec3f outward = result.mRotation * osg::Vec3f(0.f, 1.f, 0.f);
+
+        if (makeClone)
+        {
+            // the whole actor copied, then everything but this piece's parts switched off and the pose frozen
+            osg::ref_ptr<osg::Node> clone = osg::clone(mObjectRoot.get(), SceneUtil::CopyOp());
+            std::unordered_map<const osg::Node*, osg::Node*> pairs;
+            pairNodes(mObjectRoot.get(), clone.get(), pairs);
+            const std::uint32_t own = clonedParts(piece, mSevered);
+            for (int i = 0; i < ESM::PRT_Count; ++i)
+            {
+                if (!mObjectParts[i])
+                    continue;
+                auto found = pairs.find(mObjectParts[i]->getNode().get());
+                if (found != pairs.end() && !(own & (1u << i)))
+                    found->second->setNodeMask(0);
+            }
+            ClearUpdateCallbacks clear;
+            clone->accept(clear);
+            if (auto bone = getNodeMap().find(rootBone); bone != getNodeMap().end())
+                if (auto copy = pairs.find(bone->second.get()); copy != pairs.end())
+                    attachCap(copy->second, -outward, piece, crushed);
+            result.mClone = clone;
+        }
+
+        mSevered.push_back(piece);
+        for (int i = 0; i < ESM::PRT_Count; ++i)
+            applySevered(static_cast<ESM::PartReferenceType>(i));
+        // the stump: cap at the cut, the cut bone held still so the cap does not swing with attacks
+        if (auto bone = getNodeMap().find(rootBone); bone != getNodeMap().end())
+        {
+            attachCap(bone->second, outward, piece, crushed);
+            holdBone(rootBone, 1.f);
+        }
+        return result;
+    }
+
     int NpcAnimation::getSlot(const osg::NodePath& path) const
     {
         for (int i = 0; i < ESM::PRT_Count; ++i)
@@ -834,6 +921,8 @@ namespace MWRender
         // NerevarMoon: a new head or hair part stays hidden while Bodyview hides the head
         if (mHeadHidden)
             applyHeadHidden(type);
+        // NerevarMoon: a part rebuilt on a severed limb (equipment change, reload) stays hidden
+        applySevered(type);
 
         if (!mSoundsDisabled && group == MWWorld::InventoryStore::Slot_CarriedLeft)
         {

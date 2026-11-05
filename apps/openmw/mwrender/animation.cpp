@@ -66,6 +66,8 @@
 #include "util.hpp"
 #include "vismask.hpp"
 
+#include <components/sceneutil/clone.hpp>
+
 namespace
 {
     /// Removes all particle systems and related nodes in a subgraph.
@@ -1201,12 +1203,14 @@ namespace MWRender
 
         addControllers();
 
-        // NerevarMoon getup: the blend reads what the controllers wrote, so it stays last in each bone's chain
-        for (const auto& [node, callback] : mGetupBlends)
-        {
-            node->removeUpdateCallback(callback);
-            node->addUpdateCallback(callback);
-        }
+        // NerevarMoon getup: the blend reads what the controllers wrote, so it stays last in each bone's chain;
+        // dismemberment holds overwrite the controllers, so they stay last too
+        for (auto* list : { &mGetupBlends, &mBoneHolds, &mLowerBodyHolds })
+            for (const auto& [node, callback] : *list)
+            {
+                node->removeUpdateCallback(callback);
+                node->addUpdateCallback(callback);
+            }
     }
 
     void Animation::adjustSpeedMult(const std::string& groupname, float speedmult)
@@ -1971,6 +1975,8 @@ namespace MWRender
         }
         osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
         callback->setLocal(node->second->getMatrix());
+        if (auto scaled = mBoneScales.find(bone); scaled != mBoneScales.end())
+            callback->setScale(scaled->second);
         node->second->setUpdateCallback(callback); // drops keyframe, blend and rotate controllers of this bone
         mRagdollBones[bone] = callback;
         return callback.get();
@@ -1996,6 +2002,168 @@ namespace MWRender
         mRagdollBones.clear();
         mRagdoll = false;
         clearGetupBlends(false);
+    }
+
+    namespace
+    {
+        // stump cap rim radius in metres for a 0.86 m pelvis-to-head actor (close to joltragdoll.cpp's radii)
+        float capRadiusMetres(std::string_view cap)
+        {
+            if (cap == "neck")
+                return 0.06f;
+            if (cap == "wrist")
+                return 0.035f;
+            if (cap == "elbow")
+                return 0.04f;
+            if (cap == "shoulder")
+                return 0.05f;
+            if (cap == "knee")
+                return 0.055f;
+            if (cap == "hip")
+                return 0.075f;
+            return 0.11f; // waist
+        }
+
+        osg::Matrixf worldMatrixOf(const osg::Node* node)
+        {
+            const osg::NodePathList paths = node->getParentalNodePaths();
+            return paths.empty() ? osg::Matrixf() : osg::Matrixf(osg::computeLocalToWorld(paths[0]));
+        }
+
+        class StripUpdateCallbacks : public osg::NodeVisitor
+        {
+        public:
+            StripUpdateCallbacks()
+                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
+            {
+            }
+            void apply(osg::Node& node) override
+            {
+                node.setUpdateCallback(nullptr);
+                traverse(node);
+            }
+        };
+    }
+
+    RagdollBoneCallback* Animation::holdBone(std::string_view bone, float scale)
+    {
+        auto node = getNodeMap().find(bone);
+        if (node == getNodeMap().end())
+            return nullptr;
+        osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+        callback->setLocal(node->second->getMatrix());
+        callback->setScale(scale);
+        node->second->addUpdateCallback(callback);
+        mBoneHolds.emplace_back(node->second, callback);
+        return callback.get();
+    }
+
+    bool Animation::fillSeverGeometry(Piece piece, SeverResult& result) const
+    {
+        const auto& bones = pieceBones(piece);
+        auto root = getNodeMap().find(bones.front());
+        if (root == getNodeMap().end())
+            return false;
+        const osg::Matrixf rootWorld = worldMatrixOf(root->second);
+        const float boneScale = rootWorld.getScale().x();
+        const float radius = capRadiusMetres(pieceCap(piece)) * 70.f * std::max(boneScale, 0.1f);
+        osg::Vec3f start = rootWorld.getTrans(), end = start;
+        for (auto it = bones.rbegin(); it != bones.rend(); ++it)
+            if (auto found = getNodeMap().find(*it); found != getNodeMap().end() && found->second != root->second)
+            {
+                end = worldMatrixOf(found->second).getTrans();
+                break;
+            }
+        osg::Vec3f axis = end - start;
+        if (axis.length() < radius)
+        {
+            // one bone: along the bone, away from its parent
+            axis = rootWorld.getRotate() * osg::Vec3f(1.f, 0.f, 0.f);
+            axis.normalize();
+            axis *= radius * 2.5f;
+            end = start + axis;
+        }
+        osg::Vec3f dir = axis;
+        dir.normalize();
+        result.mCentre = (start + end) * 0.5f;
+        result.mRotation.makeRotate(osg::Vec3f(0.f, 1.f, 0.f), dir);
+        result.mRadius = radius;
+        result.mHalfHeight = axis.length() * 0.5f;
+        result.mRootWorld = mInsert ? worldMatrixOf(mInsert) : osg::Matrixf();
+        return true;
+    }
+
+    void Animation::attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld, Piece piece, bool crushed)
+    {
+        osg::Group* bone = boneNode ? boneNode->asGroup() : nullptr;
+        if (bone == nullptr)
+            return;
+        std::string model = "meshes/nm/dismember/cap_" + std::string(pieceCap(piece)) + (crushed ? "_crushed" : "") + ".nif";
+        osg::ref_ptr<osg::Node> cap;
+        try
+        {
+            cap = mResourceSystem->getSceneManager()->getInstance(VFS::Path::toNormalized(model));
+        }
+        catch (const std::exception& e)
+        {
+            Log(Debug::Warning) << "[dismember] no cap " << model << ": " << e.what();
+            return;
+        }
+        // cap +y along `outwardWorld`, rim radius scaled to the bone in world units
+        // the bone's own world scale (actor and race size) applies on top of the holder's
+        const osg::Matrixf boneWorld = worldMatrixOf(bone);
+        const float radius = capRadiusMetres(pieceCap(piece)) * 70.f * 1.15f;
+        osg::Quat toOutward;
+        toOutward.makeRotate(osg::Vec3f(0.f, 1.f, 0.f), outwardWorld);
+        // row vectors: v * local * boneRotation = v * toOutward
+        const osg::Matrixf local
+            = osg::Matrixf::rotate(toOutward) * osg::Matrixf::inverse(osg::Matrixf::rotate(boneWorld.getRotate()));
+        osg::ref_ptr<osg::MatrixTransform> holder
+            = new osg::MatrixTransform(osg::Matrixf::scale(radius, radius, radius) * local);
+        holder->setName("NM_Cap");
+        holder->addChild(cap);
+        bone->addChild(holder);
+    }
+
+    std::optional<Animation::SeverResult> Animation::sever(Piece piece, bool crushed, bool makeClone)
+    {
+        // creatures: one skinned mesh, so the head is scaled away on its bone and no clone is made
+        if (piece != Piece::Head || !canSever(piece, mSevered))
+            return std::nullopt;
+        SeverResult result;
+        if (!fillSeverGeometry(piece, result))
+            return std::nullopt;
+        mBoneScales["Bip01 Head"] = 0.001f;
+        holdBone("Bip01 Head", 0.001f);
+        mSevered.push_back(piece);
+        if (auto neck = getNodeMap().find("Bip01 Neck"); neck != getNodeMap().end())
+            attachCap(neck->second, result.mRotation * osg::Vec3f(0.f, 1.f, 0.f), piece, crushed);
+        return result;
+    }
+
+    bool Animation::isSevered(Piece piece) const
+    {
+        return std::find(mSevered.begin(), mSevered.end(), piece) != mSevered.end();
+    }
+
+    void Animation::setLowerBodyLocked(bool locked)
+    {
+        for (const auto& [node, callback] : mLowerBodyHolds)
+            node->removeUpdateCallback(callback);
+        mLowerBodyHolds.clear();
+        if (!locked)
+            return;
+        for (std::string_view bone : { "Bip01 Pelvis", "Bip01 L Thigh", "Bip01 L Calf", "Bip01 L Foot",
+                 "Bip01 R Thigh", "Bip01 R Calf", "Bip01 R Foot" })
+        {
+            auto node = getNodeMap().find(bone);
+            if (node == getNodeMap().end())
+                continue;
+            osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+            callback->setLocal(node->second->getMatrix());
+            node->second->addUpdateCallback(callback);
+            mLowerBodyHolds.emplace_back(node->second, callback);
+        }
     }
 
     void Animation::clearGetupBlends(bool onlyDone)

@@ -5,6 +5,7 @@
 #include "animblendcontroller.hpp"
 #include "blendmask.hpp"
 #include "bonegroup.hpp"
+#include "dismember.hpp"
 #include "ragdollpose.hpp"
 
 #include "../mwworld/movementdirection.hpp"
@@ -270,6 +271,15 @@ namespace MWRender
         std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mGetupBlends;
         void clearGetupBlends(bool onlyDone);
 
+        // NerevarMoon dismemberment: severed pieces, bones held still (stumps, locked legs; kept last in the
+        // callback chain like the getup blends) and bones scaled away (a creature's head)
+        std::vector<Piece> mSevered;
+        std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mBoneHolds;
+        std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mLowerBodyHolds;
+        std::unordered_map<std::string, float, Misc::StringUtils::CiHash, Misc::StringUtils::CiEqual> mBoneScales;
+        RagdollBoneCallback* holdBone(std::string_view bone, float scale);
+        void attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld, Piece piece, bool crushed);
+
         const NodeMap& getNodeMap() const;
 
         /* Sets the appropriate animations on the bone groups based on priority by finding
@@ -503,6 +513,27 @@ namespace MWRender
         /// from its last physics pose into the animation over `blend` seconds.
         void startGetup(std::string_view group, float startPoint, float blend);
         bool isGettingUp() const { return !mGetupBlends.empty(); }
+
+        /// NerevarMoon dismemberment. `mClone` shows the piece only, frozen as it is now, in the space of the
+        /// actor's base node (`mRootWorld` at the cut); null for creatures and when no clone was asked.
+        struct SeverResult
+        {
+            osg::ref_ptr<osg::Node> mClone;
+            osg::Matrixf mRootWorld;
+            osg::Vec3f mCentre; // world, game units
+            osg::Quat mRotation; // world: +y from the cut along the piece
+            float mRadius = 0.f;
+            float mHalfHeight = 0.f;
+        };
+        /// Hides the piece and caps the stump. Creatures: the head only, no clone. nullopt when the piece or a
+        /// piece holding it is already severed, or the skeleton lacks the cut bone.
+        virtual std::optional<SeverResult> sever(Piece piece, bool crushed, bool makeClone);
+        /// Cut bone position, axis and capsule size of a piece from the current pose; false without the cut bone.
+        bool fillSeverGeometry(Piece piece, SeverResult& result) const;
+        bool isSevered(Piece piece) const;
+        const std::vector<Piece>& getSevered() const { return mSevered; }
+        /// Legs keep their current pose; the upper body still animates.
+        void setLowerBodyLocked(bool locked);
         void setPlayScriptedOnly(bool playScriptedOnly) { mPlayScriptedOnly = playScriptedOnly; }
 
         virtual bool useShieldAnimations() const { return false; }

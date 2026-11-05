@@ -72,7 +72,7 @@ namespace MWRender
             }
         }
         else if (mLocal)
-            transform->setMatrix(*mLocal);
+            transform->setMatrix(osg::Matrixf::scale(mScale, mScale, mScale) * *mLocal);
         else if (mRelative)
         {
             // The visitor's path ends at this node; the ancestors are already updated this frame
@@ -85,7 +85,8 @@ namespace MWRender
             if (at != path.end())
             {
                 const osg::Matrixf baseWorld = osg::computeLocalToWorld(osg::NodePath(path.begin(), at + 1));
-                transform->setMatrix(worldToLocal(*mRelative * baseWorld, osg::computeLocalToWorld(path)));
+                transform->setMatrix(osg::Matrixf::scale(mScale, mScale, mScale)
+                    * worldToLocal(*mRelative * baseWorld, osg::computeLocalToWorld(path)));
             }
         }
         traverse(node, nv);

@@ -50,6 +50,8 @@ namespace MWRender
             mBlendDone = false;
         }
         bool blendDone() const { return mBlendDone; }
+        /// Dismemberment: the pose written by this callback is scaled (a creature's severed head: about 0)
+        void setScale(float scale) { mScale = scale; }
         const std::optional<osg::Matrixf>& relative() const { return mRelative; }
 
         void operator()(osg::Node* node, osg::NodeVisitor* nv) override;
@@ -61,6 +63,7 @@ namespace MWRender
         std::optional<float> mBlend; // seconds; set in blend mode
         std::optional<double> mBlendStart;
         bool mBlendDone = false;
+        float mScale = 1.f;
     };
 }
 
