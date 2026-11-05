@@ -10,6 +10,7 @@
 #include <Jolt/Physics/Collision/BroadPhase/ObjectVsBroadPhaseLayerFilterTable.h>
 #include <Jolt/Physics/Collision/ObjectLayerPairFilterTable.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
@@ -104,7 +105,11 @@ namespace MWPhysics
         {
             MWWorld::Ptr mPtr;
             JPH::BodyID mBody;
+            std::uint64_t mPieceOrder = 0; // dismember pieces only: order of creation, 0 for other objects
+            float mAge = 0.f;
         };
+        std::uint64_t mPieceCounter = 0;
+        std::vector<JoltWorld::Moved> mStopped; // pieces stopped by the cap, reported by the next step
 
         struct Ragdoll
         {
@@ -415,6 +420,49 @@ namespace MWPhysics
         return true;
     }
 
+    bool JoltWorld::addDynamicCapsule(const MWWorld::Ptr& ptr, float radius, float halfHeight,
+        const osg::Vec3f& position, const osg::Quat& rotation, const osg::Vec3f& velocity)
+    {
+        constexpr std::size_t maxPieces = 16;
+        std::size_t pieces = 0;
+        auto oldest = mImpl->mDynamics.end();
+        for (auto it = mImpl->mDynamics.begin(); it != mImpl->mDynamics.end(); ++it)
+        {
+            if (it->second.mPieceOrder == 0)
+                continue;
+            ++pieces;
+            if (oldest == mImpl->mDynamics.end() || it->second.mPieceOrder < oldest->second.mPieceOrder)
+                oldest = it;
+        }
+        if (pieces >= maxPieces && oldest != mImpl->mDynamics.end())
+        {
+            const JPH::RVec3 p = mImpl->bodies().GetPosition(oldest->second.mBody) * sJoltUnitsPerMetre;
+            const JPH::Quat q = mImpl->bodies().GetRotation(oldest->second.mBody);
+            mImpl->mStopped.push_back(Moved{ oldest->second.mPtr,
+                osg::Vec3f(static_cast<float>(p.GetX()), static_cast<float>(p.GetY()), static_cast<float>(p.GetZ())),
+                osg::Quat(q.GetX(), q.GetY(), q.GetZ(), q.GetW()), true });
+            mImpl->removeDynamic(oldest->first);
+        }
+        mImpl->removeStatic(ptr.mRef);
+        mImpl->removeDynamic(ptr.mRef);
+        const float r = std::max(radius, 1.f) / sJoltUnitsPerMetre;
+        const float h = std::max(halfHeight, 0.5f) / sJoltUnitsPerMetre;
+        JPH::BodyCreationSettings settings(new JPH::CapsuleShape(h, r), toJolt(position), toJolt(rotation),
+            JPH::EMotionType::Dynamic, sLayerMoving);
+        settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
+        settings.mFriction = 0.8f;
+        settings.mRestitution = 0.1f;
+        settings.mLinearDamping = 0.1f;
+        settings.mAngularDamping = 2.f;
+        settings.mLinearVelocity = JPH::Vec3(velocity.x(), velocity.y(), velocity.z()) / sJoltUnitsPerMetre;
+        settings.mAngularVelocity = JPH::Vec3(velocity.y(), -velocity.x(), 0.f) / (sJoltUnitsPerMetre * 4.f);
+        const JPH::BodyID id = mImpl->bodies().CreateAndAddBody(settings, JPH::EActivation::Activate);
+        if (id.IsInvalid())
+            return false;
+        mImpl->mDynamics[ptr.mRef] = Impl::Dynamic{ ptr, id, ++mImpl->mPieceCounter };
+        return true;
+    }
+
     bool JoltWorld::isDynamic(const MWWorld::Ptr& ptr) const
     {
         return mImpl->mDynamics.count(ptr.mRef) > 0;
@@ -564,7 +612,7 @@ namespace MWPhysics
 
     std::vector<JoltWorld::Moved> JoltWorld::step(float dt)
     {
-        std::vector<Moved> moved;
+        std::vector<Moved> moved = std::exchange(mImpl->mStopped, {});
         if (mImpl->mDynamics.empty() && mImpl->mRagdolls.empty())
         {
             mImpl->mTimeAccum = 0.f;
@@ -623,11 +671,14 @@ namespace MWPhysics
 
         std::vector<Impl::Key> settled;
         moved.reserve(mImpl->mDynamics.size());
-        for (const auto& [key, body] : mImpl->mDynamics)
+        for (auto& [key, body] : mImpl->mDynamics)
         {
+            body.mAge += steps * sStep;
             const JPH::RVec3 p = bodies.GetPosition(body.mBody) * sJoltUnitsPerMetre;
             const JPH::Quat q = bodies.GetRotation(body.mBody);
-            const bool asleep = !bodies.IsActive(body.mBody);
+            // a piece can roll on flat ground for a long time: it stops after the ragdoll timeout
+            const bool asleep
+                = !bodies.IsActive(body.mBody) || (body.mPieceOrder != 0 && body.mAge >= sRagdollTimeout);
             moved.push_back(Moved{ body.mPtr,
                 osg::Vec3f(static_cast<float>(p.GetX()), static_cast<float>(p.GetY()), static_cast<float>(p.GetZ())),
                 osg::Quat(q.GetX(), q.GetY(), q.GetZ(), q.GetW()), asleep });

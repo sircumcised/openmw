@@ -62,6 +62,11 @@ namespace MWPhysics
         bool addDynamic(const MWWorld::Ptr& ptr, const osg::Vec3f& halfExtents, const osg::Vec3f& centre,
             const osg::Vec3f& position, const osg::Quat& rotation, const osg::Vec3f& velocity);
         bool isDynamic(const MWWorld::Ptr& ptr) const;
+        /// NerevarMoon dismemberment: a severed piece as a capsule along its local y (`halfHeight` of the straight
+        /// part, `radius`, game units), centred at `position`. At most 16 pieces fly: the 17th stops the oldest,
+        /// reported settled by the next step.
+        bool addDynamicCapsule(const MWWorld::Ptr& ptr, float radius, float halfHeight, const osg::Vec3f& position,
+            const osg::Quat& rotation, const osg::Vec3f& velocity);
 
         /// Static copy and dynamic body of the object, when it has them.
         void remove(const MWWorld::Ptr& ptr);
