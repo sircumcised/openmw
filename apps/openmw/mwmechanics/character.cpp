@@ -2002,6 +2002,11 @@ namespace MWMechanics
 
         bool isPlayer = mPtr == MWMechanics::getPlayer();
         bool isFirstPersonPlayer = isPlayer && MWBase::Environment::get().getWorld()->isFirstPerson();
+        // NerevarMoon Bodyview: the Static camera at the head turns the body with the mouse; a turn animation started
+        // and cut on every mouse move (arena log 05/11: 75 in 60 s) is skipped as in first person
+        const MWRender::Camera* nmCamera = isPlayer ? MWBase::Environment::get().getWorld()->getCamera() : nullptr;
+        const bool isBodyviewPlayer = nmCamera && nmCamera->getMode() == MWRender::Camera::Mode::Static
+            && nmCamera->hasStaticHeadTracking();
         // NerevarMoon Bodyview (Static camera at the head bone): the player moves as in first person, with no turn to
         // the movement direction, no slowdown in turns and no turning delay that would swing the head and the camera
         // (turning animations in place stay: the feet step)
@@ -2355,7 +2360,7 @@ namespace MWMechanics
                 {
                     // It seems only bipedal actors use turning animations.
                     // Also do not use turning animations in the first-person view and when sneaking.
-                    if (!sneak && !isFirstPersonPlayer && isBiped)
+                    if (!sneak && !isFirstPersonPlayer && !isBodyviewPlayer && isBiped)
                     {
                         if (effectiveRotation > 0.f)
                             movestate = inwater ? CharState_SwimTurnRight : CharState_TurnRight;
