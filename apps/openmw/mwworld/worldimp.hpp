@@ -138,6 +138,8 @@ namespace MWWorld
         void updateKnockdowns(float duration);
         void endKnockdownFall(const Ptr& actor, Knockdown& knockdown);
         void beginGetup(const Ptr& actor, Knockdown& knockdown);
+        osg::Vec3f knockdownImpulse(const Ptr& actor);
+        void setKnockdownCollision(const Ptr& actor, bool down);
 
         bool mSky;
         bool mGodMode;

@@ -134,6 +134,15 @@ namespace MWPhysics
         }
     }
 
+    void Actor::setProjectileCollision(bool projectile)
+    {
+        if (mProjectileCollision != projectile)
+        {
+            mProjectileCollision = projectile;
+            updateCollisionMask();
+        }
+    }
+
     void Actor::addCollisionMask(int collisionMask)
     {
         mTaskScheduler->addCollisionObject(mCollisionObject.get(), CollisionType_Actor, collisionMask);
@@ -149,6 +158,8 @@ namespace MWPhysics
         int collisionMask = CollisionType_World | CollisionType_HeightMap;
         if (mExternalCollisionMode)
             collisionMask |= CollisionType_Actor | CollisionType_Projectile | CollisionType_Door;
+        else if (mProjectileCollision)
+            collisionMask |= CollisionType_Projectile;
         if (mCanWaterWalk)
             collisionMask |= CollisionType_Water;
         return collisionMask;

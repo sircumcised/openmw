@@ -45,7 +45,8 @@ namespace MWPhysics
         constexpr std::size_t sMaxRagdolls = 8;
         constexpr float sRagdollTimeout = 6.f; // seconds before a fall is frozen anyway
         constexpr float sLandingSpeed = 150.f; // units/s
-        constexpr float sRollTime = 0.6f; // seconds
+        constexpr float sRollTime = 0.9f; // seconds
+        constexpr float sRollDone = 0.8f; // chest facing z where the body lies on its back
         constexpr float sRollSpeed = 10.f; // rad/s about the pelvis-head axis
 
         void trace(const char* format, ...)
@@ -272,13 +273,15 @@ namespace MWPhysics
         void rollStep(Ragdoll& ragdoll)
         {
             const auto [axis, facing] = axisAndFacing(ragdoll);
-            if (facing.z() > 0.3f)
+            if (facing.z() > sRollDone)
             {
                 ragdoll.mRollLeft = 0.f;
                 return;
             }
             const float sign = ((axis ^ facing).z() >= 0.f) ? 1.f : -1.f;
-            const osg::Vec3f omega = axis * (sign * sRollSpeed);
+            // full speed from face down, slower towards the back so the body does not roll on over
+            const float speed = sRollSpeed * std::clamp((sRollDone + 0.15f - facing.z()) / 0.6f, 0.3f, 1.f);
+            const osg::Vec3f omega = axis * (sign * speed);
             const osg::Vec3f centre = bodyPosition(ragdoll, "Bip01 Pelvis");
             for (std::size_t i = 0; i < ragdoll.mNames.size(); ++i)
             {
@@ -426,8 +429,11 @@ namespace MWPhysics
             return false;
         if (mImpl->mRagdolls.size() >= sMaxRagdolls)
         {
-            auto oldest = std::min_element(mImpl->mRagdolls.begin(), mImpl->mRagdolls.end(),
-                [](const auto& l, const auto& r) { return l.second.mOrder < r.second.mOrder; });
+            // The oldest fall of a corpse goes first: a knocked down actor frozen in mid air would get up there
+            auto oldest = std::min_element(mImpl->mRagdolls.begin(), mImpl->mRagdolls.end(), [](const auto& l, const auto& r) {
+                const bool lDeath = l.second.mMode == RagdollMode::Death, rDeath = r.second.mMode == RagdollMode::Death;
+                return lDeath != rDeath ? lDeath : l.second.mOrder < r.second.mOrder;
+            });
             mImpl->freezeRagdoll(oldest->first);
         }
         JPH::Ref<JPH::Ragdoll> ragdoll = build.mSettings->CreateRagdoll(

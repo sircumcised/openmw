@@ -2027,14 +2027,31 @@ namespace MWRender
             const float start = startKey->first;
             if (stop <= start)
                 return 0.6f;
+            // Morrowind KFs may carry the body height on Bip01 or on Bip01 Pelvis: the track that moves most
+            const SceneUtil::KeyframeController* best = nullptr;
+            float bestRange = 1.f;
             for (const auto& [bone, controller] : (*iter)->mKeyframes->mKeyframeControllers)
-                if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
+            {
+                if (!Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis") && !Misc::StringUtils::ciEqual(bone, "Bip01"))
+                    continue;
+                float low = std::numeric_limits<float>::max(), high = std::numeric_limits<float>::lowest();
+                for (float time = start; time <= stop; time += 1.f / 30.f)
                 {
-                    const float t = findGetupStart(
-                        [&](float time) { return controller->getTranslation(time).z(); }, start, stop);
-                    return (t - start) / (stop - start);
+                    const float z = controller->getTranslation(time).z();
+                    low = std::min(low, z);
+                    high = std::max(high, z);
                 }
-            return 0.6f;
+                if (high - low > bestRange)
+                {
+                    bestRange = high - low;
+                    best = controller.get();
+                }
+            }
+            if (best == nullptr)
+                return 0.6f;
+            const float t
+                = findGetupStart([&](float time) { return best->getTranslation(time).z(); }, start, stop);
+            return (t - start) / (stop - start);
         }
         return 0.6f;
     }

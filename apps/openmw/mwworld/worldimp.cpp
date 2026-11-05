@@ -1476,13 +1476,15 @@ namespace MWWorld
                 it = mKnockdowns.erase(it);
                 continue;
             }
-            const MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+            MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
             if (stats.isDead())
             {
                 // startRagdoll erases the entry when it takes over; still here: no death ragdoll (scripted animation,
                 // water), so the knockdown body ends now and kill() can finish the death
                 if (jolt->isRagdollActive(ptr))
                     jolt->freezeRagdoll(ptr);
+                if (MWPhysics::Actor* physicActor = mPhysics->getActor(ptr))
+                    physicActor->setProjectileCollision(false);
                 it = mKnockdowns.erase(it);
                 continue;
             }
@@ -1492,6 +1494,12 @@ namespace MWWorld
             {
                 case Phase::Falling:
                 {
+                    // Hit again while falling: the engine set hit recovery; the body takes the blow instead
+                    if (stats.getHitRecovery() && jolt->isRagdollActive(ptr))
+                    {
+                        jolt->applyRagdollImpulse(ptr, knockdownImpulse(ptr), "");
+                        stats.setHitRecovery(false);
+                    }
                     if (knockdown.mFrozen)
                     {
                         knockdown.mPhase = Phase::Resting;
@@ -1555,7 +1563,7 @@ namespace MWWorld
         knockdown.mTime = 0.f;
         if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
             jolt->dropRagdoll(actor);
-        enableActorCollision(actor, true);
+        setKnockdownCollision(actor, false);
         MWRender::Animation* animation = getAnimation(actor);
         if (animation == nullptr)
             return;
@@ -1652,7 +1660,10 @@ namespace MWWorld
         MWRender::Animation* animation = getAnimation(actor);
         if (animation == nullptr)
             return false;
-        mKnockdowns.erase(actor.getCellRef().getRefNum()); // killed while down: the fall goes on as a death
+        // killed while down: the fall goes on as a death, and a corpse stops taking arrows
+        if (mKnockdowns.erase(actor.getCellRef().getRefNum()) > 0)
+            if (MWPhysics::Actor* physicActor = mPhysics->getActor(actor))
+                physicActor->setProjectileCollision(false);
         // A corpse that already fell (save made during the fall, cell visited again): its pose, no new fall
         if (auto saved = mRagdollStates.find(actor.getCellRef().getRefNum()); saved != mRagdollStates.end())
         {
@@ -1710,6 +1721,30 @@ namespace MWWorld
         return jolt != nullptr && jolt->isRagdollActive(actor) && !isKnockdownRagdoll(actor);
     }
 
+    // The blow, weaker than a death blow: from the last attacker, harder for a charged attack
+    osg::Vec3f World::knockdownImpulse(const Ptr& actor)
+    {
+        const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
+        const Ptr attacker = mWorldModel.getPtr(stats.getHitAttemptActor());
+        if (attacker.isEmpty() || attacker == actor)
+            return osg::Vec3f();
+        osg::Vec3f dir = actor.getRefData().getPosition().asVec3() - attacker.getRefData().getPosition().asVec3();
+        dir.z() = 0.f;
+        if (dir.normalize() <= 0.f)
+            return osg::Vec3f();
+        const float strength
+            = std::clamp(MWBase::Environment::get().getMechanicsManager()->getAttackStrength(attacker), 0.f, 1.f);
+        return dir * (150.f + 250.f * strength) + osg::Vec3f(0.f, 0.f, 40.f);
+    }
+
+    // Down: no standing capsule for actors and doors, but arrows and bolts still hit the actor
+    void World::setKnockdownCollision(const Ptr& actor, bool down)
+    {
+        enableActorCollision(actor, !down);
+        if (MWPhysics::Actor* physicActor = mPhysics->getActor(actor))
+            physicActor->setProjectileCollision(down);
+    }
+
     bool World::isKnockdownRagdoll(const Ptr& actor) const
     {
         return !actor.isEmpty() && mKnockdowns.count(actor.getCellRef().getRefNum()) > 0;
@@ -1731,25 +1766,11 @@ namespace MWWorld
             return false;
         const std::vector<MWPhysics::RagdollBone> bones = animation->getRagdollBones();
 
-        // The blow, weaker than a death blow: from the last attacker, harder for a charged attack
-        osg::Vec3f impulse;
-        const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
-        const Ptr attacker = mWorldModel.getPtr(stats.getHitAttemptActor());
-        if (!attacker.isEmpty() && attacker != actor)
-        {
-            osg::Vec3f dir = actor.getRefData().getPosition().asVec3() - attacker.getRefData().getPosition().asVec3();
-            dir.z() = 0.f;
-            if (dir.normalize() > 0.f)
-            {
-                const float strength = std::clamp(
-                    MWBase::Environment::get().getMechanicsManager()->getAttackStrength(attacker), 0.f, 1.f);
-                impulse = dir * (150.f + 250.f * strength) + osg::Vec3f(0.f, 0.f, 40.f);
-            }
-        }
         const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
-        if (!jolt->addRagdoll(actor, bones, 1.f / 60.f, impulse, mass, MWPhysics::JoltWorld::RagdollMode::Knockdown))
+        if (!jolt->addRagdoll(
+                actor, bones, 1.f / 60.f, knockdownImpulse(actor), mass, MWPhysics::JoltWorld::RagdollMode::Knockdown))
             return false;
-        enableActorCollision(actor, false);
+        setKnockdownCollision(actor, true);
         Knockdown& knockdown = mKnockdowns[refNum];
         knockdown = Knockdown{};
         knockdown.mKnockout = knockout;

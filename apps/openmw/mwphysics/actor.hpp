@@ -49,6 +49,8 @@ namespace MWPhysics
          * actor.
          */
         void enableCollisionBody(bool collision);
+        /// NerevarMoon: with the collision body off, projectiles still hit the actor (knocked down ragdoll)
+        void setProjectileCollision(bool projectile);
 
         void updateScale();
         void setRotation(osg::Quat quat);
@@ -187,6 +189,7 @@ namespace MWPhysics
         bool mOnSlope;
         bool mInternalCollisionMode;
         bool mExternalCollisionMode;
+        bool mProjectileCollision = false;
         bool mActive;
 
         PhysicsTaskScheduler* mTaskScheduler;
