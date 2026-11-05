@@ -1909,12 +1909,16 @@ namespace MWMechanics
         }
 
         // NerevarMoon Bodyview: the Static camera sits at the head bone, so the spine follows the look pitch
-        // always and arms, weapon and spells stay in view
+        // always and arms, weapon and spells stay in view; the bend stops at 50 degrees (a full 89 put the
+        // torso level and the shoulders around the camera, arena 05/11)
         if (mPtr == getPlayer())
         {
             const MWRender::Camera* camera = MWBase::Environment::get().getWorld()->getCamera();
             if (camera->getMode() == MWRender::Camera::Mode::Static && camera->hasStaticHeadTracking())
-                mAnimation->setPitchFactor(1.f);
+            {
+                const float look = std::abs(mPtr.getRefData().getPosition().rot[0]);
+                mAnimation->setPitchFactor(std::min(1.f, osg::DegreesToRadians(50.f) / std::max(look, 0.001f)));
+            }
         }
 
         mAnimation->setAccurateAiming(mUpperBodyState > UpperBodyState::WeaponEquipped);

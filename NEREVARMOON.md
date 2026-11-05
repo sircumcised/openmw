@@ -30,6 +30,8 @@ additive: a stock OpenMW mod keeps working, a mod that uses these additions need
 - `mwlua/animationbindings.cpp`, `files/lua_api/openmw/animation.lua`: the bindings.
 - `mwmechanics/character.cpp`: with the Static camera and head tracking on, the player's spine pitch factor
   is 1 for every weapon state (stock: ranged attacks only), so arms and weapon follow the look pitch.
+  The bend is capped at 50 degrees of look pitch (factor 50/|pitch| beyond), so looking straight down keeps the
+  shoulders behind the head camera.
 - `mwmechanics/character.cpp`: with the Static camera and head tracking on, the player skips the turn animations
   (`turnleft`/`turnright`) like first person: the mouse turns the body and started a cut turn on every move.
 
