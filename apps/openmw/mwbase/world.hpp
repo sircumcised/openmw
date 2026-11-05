@@ -314,6 +314,15 @@ namespace MWBase
         virtual bool startKnockdownRagdoll(const MWWorld::Ptr& actor, bool knockout) = 0;
         /// NerevarMoon: the actor is down as a knockdown ragdoll, or getting up from it.
         virtual bool isKnockdownRagdoll(const MWWorld::Ptr& actor) const = 0;
+        /// NerevarMoon dismemberment: `piece` (head, rhand, ..., torso) leaves the actor and flies with `impulse`
+        /// (units/s) as an object showing the actor's own meshes; `silent` only hides it (no object, no flight).
+        /// False for the player, a non-actor, an unknown piece or one already gone.
+        virtual bool sever(const MWWorld::Ptr& actor, std::string_view piece, const osg::Vec3f& impulse, bool crushed,
+            bool silent)
+            = 0;
+        virtual bool isSevered(const MWWorld::Ptr& actor, std::string_view piece) = 0;
+        /// NerevarMoon: the legs keep their pose while the upper body animates (an amputee fighting from the ground).
+        virtual void setLowerBodyLocked(const MWWorld::Ptr& actor, bool locked) = 0;
 
         virtual MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos)

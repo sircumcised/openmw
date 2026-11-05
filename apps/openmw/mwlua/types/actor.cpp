@@ -15,6 +15,7 @@
 #include "apps/openmw/mwmechanics/actorutil.hpp"
 #include "apps/openmw/mwmechanics/creaturestats.hpp"
 #include "apps/openmw/mwmechanics/drawstate.hpp"
+#include "apps/openmw/mwrender/dismember.hpp"
 #include "apps/openmw/mwworld/class.hpp"
 #include "apps/openmw/mwworld/inventorystore.hpp"
 #include "apps/openmw/mwworld/worldmodel.hpp"
@@ -533,6 +534,37 @@ namespace MWLua
                 && (stats.getFatigue().getCurrent() < 0 || stats.getFatigue().getBase() == 0);
         };
         // NerevarMoon: the body is a ragdoll (dead, or knocked down and not yet getting up)
+        // NerevarMoon dismemberment
+        actor["sever"] = [context](const Object& o, std::string_view piece, sol::optional<osg::Vec3f> impulse,
+                             sol::optional<sol::table> options) {
+            if (!MWRender::parsePiece(piece))
+                throw std::runtime_error("Unknown piece: " + std::string(piece));
+            const MWWorld::Ptr& ptr = o.ptr();
+            if (!ptr.getClass().isActor() || ptr == MWBase::Environment::get().getWorld()->getPlayerPtr())
+                return false;
+            const bool crushed = options && options->get_or("crushed", false);
+            const bool silent = options && options->get_or("silent", false);
+            context.mLuaManager->addAction(
+                [obj = Object(o), name = std::string(piece), push = impulse.value_or(osg::Vec3f()), crushed, silent] {
+                    const MWWorld::Ptr target = obj.ptrOrEmpty();
+                    if (!target.isEmpty())
+                        MWBase::Environment::get().getWorld()->sever(target, name, push, crushed, silent);
+                },
+                "SeverAction");
+            return true;
+        };
+        actor["isSevered"] = [](const Object& o, std::string_view piece) {
+            return MWBase::Environment::get().getWorld()->isSevered(o.ptr(), piece);
+        };
+        actor["setLowerBodyLocked"] = [context](const Object& o, bool locked) {
+            context.mLuaManager->addAction(
+                [obj = Object(o), locked] {
+                    const MWWorld::Ptr target = obj.ptrOrEmpty();
+                    if (!target.isEmpty())
+                        MWBase::Environment::get().getWorld()->setLowerBodyLocked(target, locked);
+                },
+                "LowerBodyLockAction");
+        };
         actor["isRagdoll"] = [](const Object& o) {
             const MWWorld::Ptr& ptr = o.ptr();
             return ptr.getClass().isActor() && MWBase::Environment::get().getWorld()->isRagdoll(ptr);

@@ -528,6 +528,9 @@ namespace MWRender
         /// Hides the piece and caps the stump. Creatures: the head only, no clone. nullopt when the piece or a
         /// piece holding it is already severed, or the skeleton lacks the cut bone.
         virtual std::optional<SeverResult> sever(Piece piece, bool crushed, bool makeClone);
+        /// The piece alone, frozen in the current pose, in the base node's space (`mRootWorld`), with its cap;
+        /// works for a piece already severed (reload). Null for creatures.
+        virtual osg::ref_ptr<osg::Node> clonePiece(Piece piece, bool crushed) { return nullptr; }
         /// Cut bone position, axis and capsule size of a piece from the current pose; false without the cut bone.
         bool fillSeverGeometry(Piece piece, SeverResult& result) const;
         bool isSevered(Piece piece) const;

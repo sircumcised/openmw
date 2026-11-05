@@ -16,6 +16,8 @@
 #include <components/esm3/cellref.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
+#include <components/esm3/gibstate.hpp>
+#include <components/esm3/loadmisc.hpp>
 #include <components/esm3/ragdollstate.hpp>
 #include <components/esm3/loadclas.hpp>
 #include <components/esm3/loadcrea.hpp>
@@ -358,6 +360,7 @@ namespace MWWorld
         mRendering->clear();
         mProjectileManager->clear();
         mRagdollStates.clear();
+        mGibs.clear();
         mKnockdowns.clear(); // RefNums repeat across loads: an old knockdown must not reach the loaded actor
         mLocalScripts.clear();
 
@@ -393,7 +396,7 @@ namespace MWWorld
             + 1 // levitation/teleport enabled state
             + 1 // camera
             + 1 // random state.
-            + mRagdollStates.size();
+            + mRagdollStates.size() + mGibs.size();
     }
 
     size_t World::countSavedGameCells() const
@@ -436,6 +439,12 @@ namespace MWWorld
             state.save(writer);
             writer.endRecord(ESM::REC_NMRD);
         }
+        for (const ESM::GibState& gib : mGibs)
+        {
+            writer.startRecord(ESM::REC_NMGB);
+            gib.save(writer);
+            writer.endRecord(ESM::REC_NMGB);
+        }
     }
 
     void World::readRecord(ESM::ESMReader& reader, uint32_t type)
@@ -445,6 +454,14 @@ namespace MWWorld
             case ESM::REC_ACTC:
                 reader.skipRecord();
                 return;
+            case ESM::REC_NMGB:
+            {
+                ESM::GibState gib;
+                gib.load(reader);
+                if (gib.mActor.isSet())
+                    mGibs.push_back(std::move(gib));
+                return;
+            }
             case ESM::REC_NMRD:
             {
                 ESM::RagdollState state;
@@ -1406,6 +1423,7 @@ namespace MWWorld
 
         // NerevarMoon: ragdolls pose their skeletons and drag the actor along with the pelvis
         applyRagdollStates(duration);
+        applyGibs(duration);
         if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
         {
             for (const MWPhysics::JoltWorld::RagdollPose& pose : jolt->takeRagdollPoses())
@@ -1743,6 +1761,128 @@ namespace MWWorld
         enableActorCollision(actor, !down);
         if (MWPhysics::Actor* physicActor = mPhysics->getActor(actor))
             physicActor->setProjectileCollision(down);
+    }
+
+    namespace
+    {
+        // the piece's clone sits on the object so that the piece at the actor (`geometry`) lands on the object
+        void attachGibClone(const MWWorld::Ptr& object, const osg::ref_ptr<osg::Node>& clone,
+            const MWRender::Animation::SeverResult& geometry)
+        {
+            osg::Group* base = object.getRefData().getBaseNode() ? object.getRefData().getBaseNode()->asGroup() : nullptr;
+            if (base == nullptr || clone == nullptr)
+                return;
+            for (unsigned int i = 0; i < base->getNumChildren(); ++i)
+                base->getChild(i)->setNodeMask(0); // the generic gib mesh, while the real piece shows
+            const osg::Matrixf pieceFrame
+                = osg::Matrixf::rotate(geometry.mRotation) * osg::Matrixf::translate(geometry.mCentre);
+            osg::ref_ptr<osg::MatrixTransform> holder
+                = new osg::MatrixTransform(geometry.mRootWorld * osg::Matrixf::inverse(pieceFrame));
+            holder->setName("NM_GibClone");
+            holder->addChild(clone);
+            base->addChild(holder);
+        }
+
+        bool hasGibClone(const MWWorld::Ptr& object)
+        {
+            osg::Group* base = object.getRefData().getBaseNode() ? object.getRefData().getBaseNode()->asGroup() : nullptr;
+            if (base == nullptr)
+                return true;
+            for (unsigned int i = 0; i < base->getNumChildren(); ++i)
+                if (base->getChild(i)->getName() == "NM_GibClone")
+                    return true;
+            return false;
+        }
+    }
+
+    bool World::sever(const Ptr& actor, std::string_view pieceName, const osg::Vec3f& impulse, bool crushed, bool silent)
+    {
+        const std::optional<MWRender::Piece> piece = MWRender::parsePiece(pieceName);
+        if (!piece || actor.isEmpty() || !actor.getClass().isActor() || actor == getPlayerPtr() || !actor.isInCell())
+            return false;
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr)
+            return false;
+        const bool npc = actor.getClass().isNpc();
+        std::optional<MWRender::Animation::SeverResult> result = animation->sever(*piece, crushed, npc && !silent);
+        if (!result)
+            return false;
+        ESM::GibState gib;
+        gib.mActor = actor.getCellRef().getRefNum();
+        gib.mPiece = std::string(pieceName);
+        gib.mCrushed = crushed;
+        Log(Debug::Info) << "[dismember] sever " << actor.getCellRef().getRefId() << " " << pieceName;
+        if (!silent)
+        {
+            ESM::RefId recordId = ESM::RefId::stringRefId("nm_gib_" + std::string(pieceName));
+            if (mStore.get<ESM::Miscellaneous>().search(recordId) == nullptr)
+            {
+                Log(Debug::Warning) << "[dismember] no record " << recordId << ", using misc_dwrv_artifact00";
+                recordId = ESM::RefId::stringRefId("misc_dwrv_artifact00");
+            }
+            MWWorld::ManualRef ref(mStore, recordId);
+            ESM::Position pos;
+            const osg::Vec3f euler = Misc::toEulerAnglesZYX(result->mRotation);
+            for (int i = 0; i < 3; ++i)
+            {
+                pos.pos[i] = result->mCentre[i];
+                pos.rot[i] = euler[i];
+            }
+            const Ptr object = placeObject(ref.getPtr(), actor.getCell(), pos);
+            if (!object.isEmpty())
+            {
+                gib.mObject = object.getCellRef().getRefNum();
+                attachGibClone(object, result->mClone, *result);
+                if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+                    jolt->addDynamicCapsule(
+                        object, result->mRadius, result->mHalfHeight, result->mCentre, result->mRotation, impulse);
+            }
+        }
+        if (gib.mActor.isSet())
+            mGibs.push_back(std::move(gib));
+        return true;
+    }
+
+    bool World::isSevered(const Ptr& actor, std::string_view pieceName)
+    {
+        const std::optional<MWRender::Piece> piece = MWRender::parsePiece(pieceName);
+        const MWRender::Animation* animation = actor.isEmpty() ? nullptr : getAnimation(actor);
+        return piece && animation != nullptr && animation->isSevered(*piece);
+    }
+
+    void World::setLowerBodyLocked(const Ptr& actor, bool locked)
+    {
+        if (MWRender::Animation* animation = actor.isEmpty() ? nullptr : getAnimation(actor))
+            animation->setLowerBodyLocked(locked);
+    }
+
+    void World::applyGibs(float duration)
+    {
+        mGibApplyTimer += duration;
+        if (mGibApplyTimer < 0.5f || mGibs.empty())
+            return;
+        mGibApplyTimer = 0.f;
+        // a reloaded actor gets its pieces cut again, a reloaded piece gets the actor's meshes again
+        for (const ESM::GibState& gib : mGibs)
+        {
+            const std::optional<MWRender::Piece> piece = MWRender::parsePiece(gib.mPiece);
+            const Ptr actor = mWorldModel.getPtr(gib.mActor);
+            if (!piece || actor.isEmpty() || !actor.isInCell() || !actor.getClass().isActor())
+                continue;
+            MWRender::Animation* animation = getAnimation(actor);
+            if (animation == nullptr)
+                continue;
+            if (!animation->isSevered(*piece))
+                animation->sever(*piece, gib.mCrushed, false);
+            if (!gib.mObject.isSet())
+                continue;
+            const Ptr object = mWorldModel.getPtr(gib.mObject);
+            if (object.isEmpty() || !object.isInCell() || hasGibClone(object))
+                continue;
+            MWRender::Animation::SeverResult geometry;
+            if (animation->fillSeverGeometry(*piece, geometry))
+                attachGibClone(object, animation->clonePiece(*piece, gib.mCrushed), geometry);
+        }
     }
 
     bool World::isKnockdownRagdoll(const Ptr& actor) const

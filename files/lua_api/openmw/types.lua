@@ -61,6 +61,32 @@
 -- @return #boolean
 
 ---
+-- NerevarMoon: sever a piece of the actor: 'head', 'rhand', 'lhand', 'rforearm', 'lforearm', 'rarm', 'larm',
+-- 'rshin', 'lshin', 'rleg', 'lleg' or 'torso'. The piece hides on the actor (stump capped) and flies with `impulse`
+-- as an object showing the actor's own meshes; creatures lose the head only. Applied at the end of the frame.
+-- Restored after a reload (saved game record NMGB). False for the player and non-actors; an error for an unknown
+-- piece name.
+-- @function [parent=#Actor] sever
+-- @param openmw.core#GameObject actor
+-- @param #string piece
+-- @param openmw.util#Vector3 impulse (optional) units per second
+-- @param #table options (optional) `crushed` (blunt cap), `silent` (hide only: no object, no flight)
+-- @return #boolean the request was queued
+
+---
+-- NerevarMoon: is this piece of the actor severed.
+-- @function [parent=#Actor] isSevered
+-- @param openmw.core#GameObject actor
+-- @param #string piece
+-- @return #boolean
+
+---
+-- NerevarMoon: legs keep their current pose while the upper body still animates (fighting from the ground).
+-- @function [parent=#Actor] setLowerBodyLocked
+-- @param openmw.core#GameObject actor
+-- @param #boolean locked
+
+---
 -- NerevarMoon: is the actor's body a Jolt ragdoll: dead, or knocked down and not yet getting up. With the
 -- ragdoll on, a bipedal actor knocked down falls as a ragdoll, rolls onto its back and gets up through the
 -- tail of its knockdown animation.

@@ -517,29 +517,8 @@ namespace MWRender
             return std::nullopt;
         const std::string_view rootBone = pieceBones(piece).front();
         const osg::Vec3f outward = result.mRotation * osg::Vec3f(0.f, 1.f, 0.f);
-
         if (makeClone)
-        {
-            // the whole actor copied, then everything but this piece's parts switched off and the pose frozen
-            osg::ref_ptr<osg::Node> clone = osg::clone(mObjectRoot.get(), SceneUtil::CopyOp());
-            std::unordered_map<const osg::Node*, osg::Node*> pairs;
-            pairNodes(mObjectRoot.get(), clone.get(), pairs);
-            const std::uint32_t own = clonedParts(piece, mSevered);
-            for (int i = 0; i < ESM::PRT_Count; ++i)
-            {
-                if (!mObjectParts[i])
-                    continue;
-                auto found = pairs.find(mObjectParts[i]->getNode().get());
-                if (found != pairs.end() && !(own & (1u << i)))
-                    found->second->setNodeMask(0);
-            }
-            ClearUpdateCallbacks clear;
-            clone->accept(clear);
-            if (auto bone = getNodeMap().find(rootBone); bone != getNodeMap().end())
-                if (auto copy = pairs.find(bone->second.get()); copy != pairs.end())
-                    attachCap(copy->second, -outward, piece, crushed);
-            result.mClone = clone;
-        }
+            result.mClone = clonePiece(piece, crushed);
 
         mSevered.push_back(piece);
         for (int i = 0; i < ESM::PRT_Count; ++i)
@@ -551,6 +530,44 @@ namespace MWRender
             holdBone(rootBone, 1.f);
         }
         return result;
+    }
+
+    osg::ref_ptr<osg::Node> NpcAnimation::clonePiece(Piece piece, bool crushed)
+    {
+        SeverResult geometry;
+        if (!mObjectRoot || !fillSeverGeometry(piece, geometry))
+            return nullptr;
+        // parts already gone with earlier cuts stay out; on a reload the piece itself is in mSevered
+        std::vector<Piece> before;
+        for (Piece gone : mSevered)
+        {
+            if (gone == piece)
+                break;
+            before.push_back(gone);
+        }
+        const std::uint32_t own = clonedParts(piece, before);
+        // the whole actor copied, then everything but this piece's parts switched off and the pose frozen
+        osg::ref_ptr<osg::Node> clone = osg::clone(mObjectRoot.get(), SceneUtil::CopyOp());
+        std::unordered_map<const osg::Node*, osg::Node*> pairs;
+        pairNodes(mObjectRoot.get(), clone.get(), pairs);
+        for (int i = 0; i < ESM::PRT_Count; ++i)
+        {
+            if (!mObjectParts[i])
+                continue;
+            auto found = pairs.find(mObjectParts[i]->getNode().get());
+            if (found != pairs.end())
+                found->second->setNodeMask((own & (1u << i)) ? ~0u : 0u);
+        }
+        ClearUpdateCallbacks clear;
+        clone->accept(clear);
+        // the actor's own stump caps came along with the copy: they belong to the body side only
+        for (const auto& [original, copy] : pairs)
+            if (original->getName() == "NM_Cap")
+                copy->setNodeMask(0);
+        if (auto bone = getNodeMap().find(pieceBones(piece).front()); bone != getNodeMap().end())
+            if (auto copy = pairs.find(bone->second.get()); copy != pairs.end())
+                attachCap(copy->second, -(geometry.mRotation * osg::Vec3f(0.f, 1.f, 0.f)), piece, crushed);
+        return clone;
     }
 
     int NpcAnimation::getSlot(const osg::NodePath& path) const

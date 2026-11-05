@@ -169,6 +169,7 @@ namespace MWRender
         /// NerevarMoon: hide the PRT_Head and PRT_Hair parts (head, hair, helmet, hood) from the main camera,
         /// keeping their shadow. Survives part changes and rebuilds; cleared by setViewMode(VM_FirstPerson).
         std::optional<SeverResult> sever(Piece piece, bool crushed, bool makeClone) override;
+        osg::ref_ptr<osg::Node> clonePiece(Piece piece, bool crushed) override;
         void setHeadHidden(bool hidden);
 
         void updateParts();

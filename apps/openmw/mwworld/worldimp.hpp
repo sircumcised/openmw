@@ -5,6 +5,7 @@
 #include <osg/ref_ptr>
 
 #include <components/debug/debuglog.hpp>
+#include <components/esm3/gibstate.hpp>
 #include <components/esm3/ragdollstate.hpp>
 
 #include <map>
@@ -135,6 +136,12 @@ namespace MWWorld
             std::vector<std::pair<std::string, osg::Matrixf>> mWorld; // last pose, world space
         };
         std::map<ESM::RefNum, Knockdown> mKnockdowns;
+
+        // NerevarMoon dismemberment: every severed piece, applied again to actors and piece objects that are
+        // (re)loaded; saved as NMGB records
+        std::vector<ESM::GibState> mGibs;
+        float mGibApplyTimer = 0.f;
+        void applyGibs(float duration);
         void updateKnockdowns(float duration);
         void endKnockdownFall(const Ptr& actor, Knockdown& knockdown);
         void beginGetup(const Ptr& actor, Knockdown& knockdown);
@@ -418,6 +425,10 @@ namespace MWWorld
         void stopRagdoll(const Ptr& actor) override;
         bool startKnockdownRagdoll(const Ptr& actor, bool knockout) override;
         bool isKnockdownRagdoll(const Ptr& actor) const override;
+        bool sever(const Ptr& actor, std::string_view piece, const osg::Vec3f& impulse, bool crushed,
+            bool silent) override;
+        bool isSevered(const Ptr& actor, std::string_view piece) override;
+        void setLowerBodyLocked(const Ptr& actor, bool locked) override;
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;

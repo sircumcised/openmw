@@ -147,6 +147,8 @@ namespace ESM
 
         // NerevarMoon: ragdoll corpse poses in saved games (stock OpenMW skips the record)
         REC_NMRD = esm3Recname("NMRD"),
+        // NerevarMoon: severed pieces in saved games (stock OpenMW skips the record)
+        REC_NMGB = esm3Recname("NMGB"),
 
         REC_ATTR = esm3Recname("ATTR"), // Attribute
 
