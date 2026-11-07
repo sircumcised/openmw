@@ -80,6 +80,14 @@ namespace MWRender
         bool mAccurateAiming;
         float mAimingFactor;
 
+        // NerevarMoon: Bodyview head hider, with the masks the hidden parts had before
+        bool mHeadHidden = false;
+        std::array<osg::Node::NodeMask, ESM::PRT_Count> mHeadPartMasks{};
+        void applyHeadHidden(ESM::PartReferenceType type);
+
+        // NerevarMoon dismemberment: severed parts are hidden (mask 0, no shadow) whenever they are built again
+        void applySevered(ESM::PartReferenceType type);
+
         void updateNpcBase();
 
         NpcType getNpcType() const;
@@ -157,6 +165,12 @@ namespace MWRender
         void showWeapon(bool show) override { showWeapons(show); }
 
         void setViewMode(ViewMode viewMode);
+
+        /// NerevarMoon: hide the PRT_Head and PRT_Hair parts (head, hair, helmet, hood) from the main camera,
+        /// keeping their shadow. Survives part changes and rebuilds; cleared by setViewMode(VM_FirstPerson).
+        std::optional<SeverResult> sever(Piece piece, bool crushed, bool makeClone) override;
+        osg::ref_ptr<osg::Node> clonePiece(Piece piece, bool crushed) override;
+        void setHeadHidden(bool hidden);
 
         void updateParts();
 

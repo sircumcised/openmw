@@ -6,6 +6,10 @@
 #include <osg/ref_ptr>
 
 #include <components/debug/debuglog.hpp>
+#include <components/esm3/gibstate.hpp>
+#include <components/esm3/ragdollstate.hpp>
+
+#include <map>
 #include <components/esm3/readerscache.hpp>
 #include <components/misc/framestats.hpp>
 #include <components/misc/rng.hpp>
@@ -106,6 +110,43 @@ namespace MWWorld
         std::unique_ptr<MWWorld::WeatherManager> mWeatherManager;
         std::unique_ptr<MWWorld::DateTimeManager> mTimeManager;
         std::unique_ptr<ProjectileManager> mProjectileManager;
+
+        // NerevarMoon: ragdoll corpse poses by actor, kept across cell loads and saved as NMRD records
+        std::map<ESM::RefNum, ESM::RagdollState> mRagdollStates;
+        float mRagdollApplyTimer = 0.f;
+        void applyRagdollStates(float duration);
+        bool applyRagdollState(const Ptr& actor, const ESM::RagdollState& state);
+
+        // NerevarMoon: knockdown ragdolls; not saved (a reload shows the engine's knockdown of today)
+        struct Knockdown
+        {
+            enum class Phase
+            {
+                Falling,
+                Rolling,
+                Resting,
+                GettingUp,
+            };
+            Phase mPhase = Phase::Falling;
+            bool mKnockout = false;
+            float mTime = 0.f; // seconds in this phase
+            bool mAsleep = false; // from the last pose
+            bool mRolling = false;
+            bool mFrozen = false; // the Jolt bodies are gone (cap of 8 or knockout rest)
+            std::vector<std::pair<std::string, osg::Matrixf>> mWorld; // last pose, world space
+        };
+        std::map<ESM::RefNum, Knockdown> mKnockdowns;
+
+        // NerevarMoon dismemberment: every severed piece, applied again to actors and piece objects that are
+        // (re)loaded; saved as NMGB records
+        std::vector<ESM::GibState> mGibs;
+        float mGibApplyTimer = 0.f;
+        void applyGibs(float duration);
+        void updateKnockdowns(float duration);
+        void endKnockdownFall(const Ptr& actor, Knockdown& knockdown);
+        void beginGetup(const Ptr& actor, Knockdown& knockdown);
+        osg::Vec3f knockdownImpulse(const Ptr& actor);
+        void setKnockdownCollision(const Ptr& actor, bool down);
 
         bool mSky;
         bool mGodMode;
@@ -400,6 +441,20 @@ namespace MWWorld
         /// \param adjust indicates rotation should be set or adjusted
         void rotateObject(const Ptr& ptr, const osg::Vec3f& rot,
             MWBase::RotationFlags flags = MWBase::RotationFlag_inverseOrder) override;
+
+        bool physicsAvailable() const override;
+        bool setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity) override;
+        bool startRagdoll(const Ptr& actor) override;
+        bool isRagdoll(const Ptr& actor) override;
+        bool isRagdollFalling(const Ptr& actor) const override;
+        bool ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone) override;
+        void stopRagdoll(const Ptr& actor) override;
+        bool startKnockdownRagdoll(const Ptr& actor, bool knockout) override;
+        bool isKnockdownRagdoll(const Ptr& actor) const override;
+        bool sever(const Ptr& actor, std::string_view piece, const osg::Vec3f& impulse, bool crushed,
+            bool silent) override;
+        bool isSevered(const Ptr& actor, std::string_view piece) override;
+        void setLowerBodyLocked(const Ptr& actor, bool locked) override;
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;

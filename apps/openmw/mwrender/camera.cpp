@@ -107,14 +107,71 @@ namespace MWRender
         return offset;
     }
 
+    namespace
+    {
+        constexpr float sHeadReturnTime = 0.3f; // seconds from the head's view back to yaw/pitch
+    }
+
+    void Camera::setStaticHeadTracking(
+        const std::optional<osg::Vec3f>& offset, bool followRotation, float stabilization)
+    {
+        mHeadStabilization = std::clamp(stabilization, 0.f, 1.f);
+        if (!offset)
+            mHeadOffsetFiltered.reset();
+        followRotation = followRotation && offset.has_value();
+        if (followRotation && !mFollowHeadRotation)
+            mHeadDelta.reset();
+        else if (!followRotation && mFollowHeadRotation && mHeadDelta)
+            mHeadReturn = sHeadReturnTime;
+        mFollowHeadRotation = followRotation;
+        mStaticHeadOffset = offset;
+    }
+
+    std::optional<osg::Quat> Camera::calculateHeadRotation() const
+    {
+        if (!mAnimation)
+            return std::nullopt;
+        const osg::Node* head = mAnimation->getNode("Bip01 Head");
+        if (!head)
+            return std::nullopt;
+        osg::NodePathList nodepaths = head->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        return osg::computeLocalToWorld(nodepaths[0]).getRotate();
+    }
+
     void Camera::updateCamera(osg::Camera* cam)
     {
         osg::Quat orient = getOrient();
+        if (mMode == Mode::Static && mStaticHeadOffset && mFollowHeadRotation)
+        {
+            // NerevarMoon: ragdoll view; the head's turn from the moment this started turns the view
+            if (std::optional<osg::Quat> head = calculateHeadRotation())
+            {
+                if (!mHeadDelta)
+                    mHeadDelta = orient * head->inverse();
+                orient = *mHeadDelta * *head;
+                mLastHeadView = orient;
+            }
+        }
+        else if (mHeadReturn > 0.f)
+        {
+            osg::Quat back;
+            back.slerp(1.f - mHeadReturn / sHeadReturnTime, mLastHeadView, orient);
+            orient = back;
+        }
         osg::Vec3d forward = orient * osg::Vec3d(0, 1, 0);
         osg::Vec3d up = orient * osg::Vec3d(0, 0, 1);
 
         osg::Vec3d pos = mPosition;
-        if (mMode == Mode::FirstPerson)
+        if (mMode == Mode::Static && mStaticHeadOffset)
+        {
+            // NerevarMoon: same reason as the first person hack below; a Lua-set position is one frame behind the
+            // body and its animation, and the body then shakes in front of the camera by speed * frame time
+            if (std::optional<osg::Vec3d> head = calculateStaticHeadPosition())
+                pos = *head;
+        }
+        else if (mMode == Mode::FirstPerson)
         {
             // It is a hack. Camera position depends on neck animation.
             // Animations are updated in OSG cull traversal and in order to avoid 1 frame delay we
@@ -142,7 +199,23 @@ namespace MWRender
         wm->showCrosshair(!wm->isGuiMode() && mShowCrosshair);
 
         if (!paused)
+        {
             updateFocalPointOffset(duration);
+            mHeadReturn = std::max(mHeadReturn - duration, 0.f);
+            // low pass of the head relative to the body, 0.1 s; a jump over 50 units (teleport, fall) snaps
+            const std::optional<osg::Vec3d> bone = calculateHeadBonePosition();
+            const std::optional<osg::Vec3d> body = trackedActorPosition();
+            if (mStaticHeadOffset && mHeadStabilization > 0.f && bone && body)
+            {
+                const osg::Vec3d raw = *bone - *body;
+                if (!mHeadOffsetFiltered || (raw - *mHeadOffsetFiltered).length() > 50.0)
+                    mHeadOffsetFiltered = raw;
+                else
+                    *mHeadOffsetFiltered += (raw - *mHeadOffsetFiltered) * (1.0 - std::exp(-duration / 0.1));
+            }
+            else
+                mHeadOffsetFiltered.reset();
+        }
         updatePosition();
     }
 
@@ -157,11 +230,59 @@ namespace MWRender
         return res;
     }
 
+    std::optional<osg::Vec3d> Camera::calculateHeadBonePosition() const
+    {
+        if (!mAnimation)
+            return std::nullopt;
+        const osg::Node* head = mAnimation->getNode("Bip01 Head");
+        if (!head)
+            return std::nullopt;
+        osg::NodePathList nodepaths = head->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        return osg::computeLocalToWorld(nodepaths[0]).getTrans();
+    }
+
+    std::optional<osg::Vec3d> Camera::trackedActorPosition() const
+    {
+        if (mTrackingPtr.isEmpty())
+            return std::nullopt;
+        return osg::Vec3d(mTrackingPtr.getRefData().getPosition().asVec3());
+    }
+
+    std::optional<osg::Vec3d> Camera::calculateStaticHeadPosition() const
+    {
+        if (!mStaticHeadOffset)
+            return std::nullopt;
+        std::optional<osg::Vec3d> bone = calculateHeadBonePosition();
+        if (!bone)
+            return std::nullopt;
+        osg::Vec3d res = *bone;
+        // NerevarMoon: part of the walk and run sway of the head is filtered out (never for a ragdoll)
+        const std::optional<osg::Vec3d> body = trackedActorPosition();
+        if (mHeadStabilization > 0.f && !mFollowHeadRotation && mHeadOffsetFiltered && body)
+        {
+            const osg::Vec3d raw = res - *body;
+            res = *body + *mHeadOffsetFiltered * mHeadStabilization + raw * (1.0 - mHeadStabilization);
+        }
+        const osg::Vec3f& off = *mStaticHeadOffset;
+        osg::Vec2f horizontalOffset = Misc::rotateVec2f(osg::Vec2f(off.x(), off.y()), mYaw);
+        res.x() += horizontalOffset.x();
+        res.y() += horizontalOffset.y();
+        res.z() += off.z();
+        return res;
+    }
+
     void Camera::updatePosition()
     {
         mTrackedPosition = calculateTrackedPosition();
         if (mMode == Mode::Static)
+        {
+            // sound listener and the rest of the frame read mPosition: give them the tracked head too
+            if (std::optional<osg::Vec3d> head = calculateStaticHeadPosition())
+                mPosition = *head;
             return;
+        }
         if (mMode == Mode::FirstPerson)
         {
             mPosition = calculateFirstPersonPosition(mTrackedPosition);
@@ -416,10 +537,16 @@ namespace MWRender
 
     void Camera::rotateCameraToTrackingPtr()
     {
-        if (mMode == Mode::Static || mTrackingPtr.isEmpty())
+        if (mTrackingPtr.isEmpty())
             return;
-        setPitch(-mTrackingPtr.getRefData().getPosition().rot[0] - mDeferredRotation.x());
-        setYaw(-mTrackingPtr.getRefData().getPosition().rot[2] - mDeferredRotation.z());
+        // NerevarMoon: with head tracking the Static camera follows the body's rotation when it is applied. The Lua
+        // setYaw/setPitch from onFrame read the rotation before this frame's mouse turn and lock it (force), so the
+        // body swayed in front of the camera while turning; force overrides that stale value
+        const bool headTracked = mMode == Mode::Static && mStaticHeadOffset.has_value();
+        if (mMode == Mode::Static && !headTracked)
+            return;
+        setPitch(-mTrackingPtr.getRefData().getPosition().rot[0] - mDeferredRotation.x(), headTracked);
+        setYaw(-mTrackingPtr.getRefData().getPosition().rot[2] - mDeferredRotation.z(), headTracked);
     }
 
     void Camera::instantTransition()

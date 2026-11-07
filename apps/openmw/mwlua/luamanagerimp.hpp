@@ -114,8 +114,8 @@ namespace MWLua
         void jailTimeServed(const MWWorld::Ptr& actor, int days) override;
         void onHit(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim, const MWWorld::Ptr& weapon,
             const MWWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage,
-            bool isHealth, const osg::Vec3f& hitPos, bool successful,
-            MWMechanics::DamageSourceType sourceType) override;
+            bool isHealth, const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType sourceType,
+            bool critical = false, bool blocked = false) override;
         void exteriorCreated(MWWorld::CellStore& cell) override
         {
             mEngineEvents.addToQueue(EngineEvents::OnNewExterior{ cell });
@@ -220,6 +220,7 @@ namespace MWLua
         bool mReloadAllScriptsRequested = false;
         bool mRunningSynchronizedUpdates = false;
         LuaUtil::ScriptsConfiguration mConfiguration;
+        unsigned mTimingFrames = 0; // NerevarMoon: lua timing log
         LuaUtil::LuaState mLua;
         LuaUi::ResourceManager mUiResourceManager;
         std::map<std::string, sol::object> mLocalPackages;

@@ -632,6 +632,7 @@ namespace MWClass
 
         MWBase::World* world = MWBase::Environment::get().getWorld();
         const MWWorld::Store<ESM::GameSetting>& store = world->getStore().get<ESM::GameSetting>();
+        bool critical = false; // NerevarMoon
 
         if (ptr == MWMechanics::getPlayer())
         {
@@ -646,6 +647,7 @@ namespace MWClass
                 = !seq.isInCombat() && !MWBase::Environment::get().getMechanicsManager()->awarenessCheck(ptr, victim);
             if (unaware)
             {
+                critical = true; // NerevarMoon: reported in the Hit event and NMHitResult
                 damage *= store.find("fCombatCriticalStrikeMult")->mValue.getFloat();
                 MWBase::Environment::get().getWindowManager()->messageBox("#{sTargetCriticalStrike}");
                 if (healthdmg)
@@ -664,7 +666,8 @@ namespace MWClass
 
         MWMechanics::applyElementalShields(ptr, victim);
 
-        if (MWMechanics::blockMeleeAttack(ptr, victim, weapon, damage, attackStrength))
+        const bool blocked = MWMechanics::blockMeleeAttack(ptr, victim, weapon, damage, attackStrength); // NerevarMoon
+        if (blocked)
             damage = 0;
 
         if (victim == MWMechanics::getPlayer() && MWBase::Environment::get().getWorld()->getGodModeState())
@@ -673,7 +676,7 @@ namespace MWClass
         MWMechanics::diseaseContact(victim, ptr);
 
         MWBase::Environment::get().getLuaManager()->onHit(ptr, victim, weapon, MWWorld::Ptr(), type, attackStrength,
-            attackWindUp, damage, healthdmg, hitPosition, true, MWMechanics::DamageSourceType::Melee);
+            attackWindUp, damage, healthdmg, hitPosition, true, MWMechanics::DamageSourceType::Melee, critical, blocked);
     }
 
     void Npc::onHit(const MWWorld::Ptr& ptr, const std::map<std::string, float>& damages, ESM::RefId object,

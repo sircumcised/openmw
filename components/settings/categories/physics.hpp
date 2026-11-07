@@ -21,6 +21,10 @@ namespace Settings
         SettingValue<int> mAsyncNumThreads{ mIndex, "Physics", "async num threads", makeMaxSanitizerInt(0) };
         SettingValue<int> mLineofsightKeepInactiveCache{ mIndex, "Physics", "lineofsight keep inactive cache",
             makeMaxSanitizerInt(-1) };
+        // NerevarMoon: Jolt Physics for dynamic bodies (ragdolls); false leaves Bullet alone as in stock OpenMW
+        SettingValue<bool> mJolt{ mIndex, "Physics", "jolt" };
+        // NerevarMoon: bipedal actors fall as Jolt ragdolls on death (needs jolt = true)
+        SettingValue<bool> mRagdoll{ mIndex, "Physics", "ragdoll" };
     };
 }
 

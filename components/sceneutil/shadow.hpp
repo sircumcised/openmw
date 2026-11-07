@@ -49,6 +49,9 @@ namespace SceneUtil
 
         void enableOutdoorMode();
 
+        /// NerevarMoon: node mask bits drawn into the shadow maps even when the viewing camera culls them.
+        void setShadowOnlyMask(unsigned int mask);
+
     protected:
         static ShadowManager* sInstance;
 

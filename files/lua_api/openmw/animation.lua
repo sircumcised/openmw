@@ -232,6 +232,46 @@
 -- animation.addGlow(self, { color = util.color.rgb(1, 0, 0), duration = 1.5 })
 
 ---
+-- NerevarMoon: is this node driven by the engine's bone physics solver (a `<model>.physics.yaml` chain).
+-- Nodes of attached weapons and worn parts are found too.
+-- @function [parent=#animation] hasBonePhysics
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @return #boolean
+
+---
+-- NerevarMoon: world transform of a bone of the actor's current model (the third person model unless the
+-- player is in first person view). Read only. It is the pose drawn this frame, so a camera placed from it
+-- lands one frame later. The matrix includes the actor's scale: a bone-local offset scales with race height.
+-- Nodes of attached weapons and worn parts are not searched.
+-- @function [parent=#animation] getBoneTransform
+-- @param openmw.core#GameObject actor
+-- @param #string boneName
+-- @return openmw.util#Transform world transform, or nil when the bone or the model is missing
+-- @usage local head = animation.getBoneTransform(self, 'Bip01 Head')
+-- if head then print(head:apply(util.vector3(0, 0, 0))) end
+
+---
+-- NerevarMoon: hide the player's head, hair and helmet parts from the main camera. They still cast shadows
+-- and show in water reflections. Kept when equipment changes or the model is rebuilt; cleared when the player
+-- switches to first person view. A new player model (game load, new game, race, sex, head or hair change in
+-- character generation) starts with the head shown, so call it again then.
+-- Applied at the start of the next frame, like @{#animation.addVfx}.
+-- Can only be used on self, and only on the player (error otherwise).
+-- @function [parent=#animation] setHeadHidden
+-- @param openmw.core#GameObject actor the player (self)
+-- @param #boolean hidden
+
+---
+-- NerevarMoon engine only: true when @{#animation.getBoneTransform} and @{#animation.setHeadHidden} exist
+-- (nil in stock OpenMW).
+-- @field [parent=#animation] #boolean bodyview
+
+---
+-- NerevarMoon engine only: true when @{#animation.addVfx} accepts the `offset` option (nil in stock OpenMW).
+-- @field [parent=#animation] #boolean vfxOffset
+
+---
 -- Plays a VFX on the actor.
 -- Can only be used on self. Can also be evoked by sending an AddVfx event to the target actor.
 -- @function [parent=#animation] addVfx
@@ -246,6 +286,7 @@
 --   * `useAmbientLight` - boolean, vfx get a white ambient light attached in Morrowind. If false don't attach this. (default: true)
 --   * `autoTransform` - boolean, if true, the engine will auto-calculate the transform. (default: true)
 --   * `transform` - relative transform (openmw.util#Transform) applied to the vfx. If autoTransform is true this will be applied on top of it.
+--   * `offset` - @{openmw.util#Transform}, NerevarMoon engine only: where the model sits in the bone's space (or the actor's, without `boneName`), e.g. a weapon held in the left hand. (default: none)
 --
 -- @usage local mgef = core.magic.effects.records[myEffectName]
 -- anim.addVfx(self, 'VFX_Hands', {boneName = 'Bip01 L Hand', particleTextureOverride = mgef.particle, loop = mgef.continuousVfx, vfxId = mgef.id..'_myuniquenamehere'})

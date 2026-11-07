@@ -226,4 +226,10 @@ namespace SceneUtil
             mShadowTechnique->enableShadows();
         mShadowSettings->setCastsShadowTraversalMask(mOutdoorShadowCastingMask);
     }
+
+    // NerevarMoon: casters hidden from the main camera (Bodyview head)
+    void ShadowManager::setShadowOnlyMask(unsigned int mask)
+    {
+        mShadowTechnique->setShadowOnlyMask(mask);
+    }
 }

@@ -33,6 +33,7 @@
 #include <components/sceneutil/positionattitudetransform.hpp>
 
 #include "../mwrender/animation.hpp"
+#include "../mwrender/camera.hpp"
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
@@ -406,6 +407,9 @@ namespace MWMechanics
 
         if (mHitState != CharState_None)
         {
+            // NerevarMoon: down as a ragdoll or getting up from it; World ends it
+            if (world->isKnockdownRagdoll(mPtr))
+                return;
             if (!mAnimation->isPlaying(mCurrentHit))
             {
                 if (isKnockedOut() && mCurrentHit.empty() && knockout)
@@ -479,6 +483,11 @@ namespace MWMechanics
             mCurrentHit.clear();
             return;
         }
+
+        // NerevarMoon: the body falls as a ragdoll and gets up through the knockdown group (World)
+        if ((isKnockedOut() || isKnockedDown()) && mAnimation->hasAnimation("knockdown")
+            && world->startKnockdownRagdoll(mPtr, isKnockedOut()))
+            return;
 
         playBlendedAnimation(mCurrentHit, priority, MWRender::BlendMask_All, true, 1, startKey, stopKey, 0.0f,
             std::numeric_limits<uint32_t>::max());
@@ -887,6 +896,14 @@ namespace MWMechanics
         // Do not interrupt scripted animation by death
         if (!mAnimation || isScriptedAnimPlaying())
             return;
+
+        // NerevarMoon: bipeds fall as ragdolls; the death state stays set, no death animation plays
+        MWBase::World* world = MWBase::Environment::get().getWorld();
+        if (mDeathState != CharState_SwimDeath && (world->isRagdollFalling(mPtr) || world->startRagdoll(mPtr)))
+        {
+            mCurrentDeath.clear();
+            return;
+        }
 
         playDeath(startpoint, mDeathState);
     }
@@ -1895,6 +1912,19 @@ namespace MWMechanics
             }
         }
 
+        // NerevarMoon Bodyview: the Static camera sits at the head bone, so the spine follows the look pitch
+        // always and arms, weapon and spells stay in view; the bend stops at 50 degrees (a full 89 put the
+        // torso level and the shoulders around the camera, arena 05/11)
+        if (mPtr == getPlayer())
+        {
+            const MWRender::Camera* camera = MWBase::Environment::get().getWorld()->getCamera();
+            if (camera->getMode() == MWRender::Camera::Mode::Static && camera->hasStaticHeadTracking())
+            {
+                const float look = std::abs(mPtr.getRefData().getPosition().rot[0]);
+                mAnimation->setPitchFactor(std::min(1.f, osg::DegreesToRadians(50.f) / std::max(look, 0.001f)));
+            }
+        }
+
         mAnimation->setAccurateAiming(mUpperBodyState > UpperBodyState::WeaponEquipped);
 
         return forcestateupdate;
@@ -1981,6 +2011,21 @@ namespace MWMechanics
 
         bool isPlayer = mPtr == MWMechanics::getPlayer();
         bool isFirstPersonPlayer = isPlayer && MWBase::Environment::get().getWorld()->isFirstPerson();
+        // NerevarMoon Bodyview: the Static camera at the head turns the body with the mouse; a turn animation started
+        // and cut on every mouse move (arena log 05/11: 75 in 60 s) is skipped as in first person
+        const MWRender::Camera* nmCamera = isPlayer ? MWBase::Environment::get().getWorld()->getCamera() : nullptr;
+        const bool isBodyviewPlayer = nmCamera && nmCamera->getMode() == MWRender::Camera::Mode::Static
+            && nmCamera->hasStaticHeadTracking();
+        // NerevarMoon Bodyview (Static camera at the head bone): the player moves as in first person, with no turn to
+        // the movement direction, no slowdown in turns and no turning delay that would swing the head and the camera
+        // (turning animations in place stay: the feet step)
+        bool firstPersonMovement = isFirstPersonPlayer;
+        if (isPlayer && !isFirstPersonPlayer)
+        {
+            const MWRender::Camera* camera = MWBase::Environment::get().getWorld()->getCamera();
+            firstPersonMovement
+                = camera->getMode() == MWRender::Camera::Mode::Static && camera->hasStaticHeadTracking();
+        }
         bool godmode = isPlayer && MWBase::Environment::get().getWorld()->getGodModeState();
 
         float scale = mPtr.getCellRef().getScale();
@@ -2043,7 +2088,7 @@ namespace MWMechanics
                 float deltaLen = delta.length();
 
                 float maxDelta;
-                if (isFirstPersonPlayer)
+                if (firstPersonMovement)
                     maxDelta = 1;
                 else if (std::abs(speedDelta) < deltaLen / 2)
                     // Turning is smooth for player and less smooth for NPCs (otherwise NPC can miss a path point).
@@ -2083,7 +2128,7 @@ namespace MWMechanics
             bool canMove = cls.getMaxSpeed(mPtr) > 0;
             const bool turnToMovementDirection = Settings::game().mTurnToMovementDirection;
             const bool isBiped = mPtr.getClass().isBipedal(mPtr);
-            if (!isBiped || !turnToMovementDirection || isFirstPersonPlayer)
+            if (!isBiped || !turnToMovementDirection || firstPersonMovement)
             {
                 movementSettings.mIsStrafing = std::abs(vec.x()) > std::abs(vec.y()) * 2;
                 stats.setSideMovementAngle(0);
@@ -2323,7 +2368,7 @@ namespace MWMechanics
                 {
                     // It seems only bipedal actors use turning animations.
                     // Also do not use turning animations in the first-person view and when sneaking.
-                    if (!sneak && !isFirstPersonPlayer && isBiped)
+                    if (!sneak && !isFirstPersonPlayer && !isBodyviewPlayer && isBiped)
                     {
                         if (effectiveRotation > 0.f)
                             movestate = inwater ? CharState_SwimTurnRight : CharState_TurnRight;
@@ -2411,6 +2456,7 @@ namespace MWMechanics
                     scale *= std::max(1.f, speedMult / maxSpeedMult);
             }
 
+            rot *= mPtr.getClass().getCreatureStats(mPtr).getTimeScale(); // NerevarMoon: per-actor time scale
             if (!mSkipAnim)
             {
                 if (!isKnockedDown() && !isKnockedOut())
@@ -2504,8 +2550,12 @@ namespace MWMechanics
                 }
             }
 
-            movement.x() *= scale;
-            movement.y() *= scale;
+            // NerevarMoon: the time scale also slows the walking speed handed to the physics
+            const float timeScale = cls.getCreatureStats(mPtr).getTimeScale();
+            movement.x() *= scale * timeScale;
+            movement.y() *= scale * timeScale;
+            if (world->isSwimming(mPtr) || world->isFlying(mPtr))
+                movement.z() *= timeScale; // jumps keep their height: z on the ground is the jump impulse
             world->queueMovement(mPtr, movement);
         }
 
@@ -2820,7 +2870,7 @@ namespace MWMechanics
         }
 
         MWMechanics::CreatureStats& cStats = mPtr.getClass().getCreatureStats(mPtr);
-        if (isAnimPlaying(mCurrentDeath))
+        if (isAnimPlaying(mCurrentDeath) || MWBase::Environment::get().getWorld()->isRagdollFalling(mPtr))
             return Result_DeathAnimPlaying;
         if (!cStats.isDeathAnimationFinished())
         {
@@ -2835,6 +2885,7 @@ namespace MWMechanics
         if (mDeathState == CharState_None)
             return;
 
+        MWBase::Environment::get().getWorld()->stopRagdoll(mPtr);
         resetCurrentDeathState();
         mWeaponTypeId = {};
     }

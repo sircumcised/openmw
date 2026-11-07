@@ -29,6 +29,15 @@ Lua Settings
    Enables Lua profiler.
 
 .. omw-setting::
+   :title: lua timing log
+   :type: boolean
+   :range: true, false
+   :default: false
+
+   NerevarMoon: every 600 frames writes the real time spent per Lua script and handler to openmw.log
+   (lines starting with ``NMLUA|``). Independent of the Lua profiler.
+
+.. omw-setting::
    :title: small alloc max size
    :type: int
    :range: ≥ 0

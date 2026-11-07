@@ -45,6 +45,7 @@
 #include <components/sceneutil/positionattitudetransform.hpp>
 #include <components/sceneutil/skeleton.hpp>
 #include <components/sceneutil/statesetupdater.hpp>
+#include <components/sceneutil/bonephysics.hpp>
 #include <components/sceneutil/util.hpp>
 #include <components/sceneutil/visitor.hpp>
 
@@ -65,6 +66,8 @@
 #include "rotatecontroller.hpp"
 #include "util.hpp"
 #include "vismask.hpp"
+
+#include <components/sceneutil/clone.hpp>
 
 namespace
 {
@@ -880,7 +883,7 @@ namespace MWRender
         float speedmult, std::string_view start, std::string_view stop, float startpoint, uint32_t loops,
         bool loopfallback)
     {
-        if (!mObjectRoot || mAnimSources.empty())
+        if (!mObjectRoot || mAnimSources.empty() || mRagdoll)
             return;
 
         if (groupname.empty())
@@ -1107,6 +1110,8 @@ namespace MWRender
 
     void Animation::resetActiveGroups()
     {
+        if (mRagdoll)
+            return; // the ragdoll owns the bones; other bones keep their last pose
         // remove all previous external controllers from the scene graph
         for (auto it = mActiveControllers.begin(); it != mActiveControllers.end(); ++it)
         {
@@ -1191,6 +1196,15 @@ namespace MWRender
         }
 
         addControllers();
+
+        // NerevarMoon getup: the blend reads what the controllers wrote, so it stays last in each bone's chain;
+        // dismemberment holds overwrite the controllers, so they stay last too
+        for (auto* list : { &mGetupBlends, &mBoneHolds, &mLowerBodyHolds })
+            for (const auto& [node, callback] : *list)
+            {
+                node->removeUpdateCallback(callback);
+                node->addUpdateCallback(callback);
+            }
     }
 
     void Animation::adjustSpeedMult(const std::string& groupname, float speedmult)
@@ -1333,6 +1347,7 @@ namespace MWRender
 
     osg::Vec3f Animation::runAnimation(float duration)
     {
+        clearGetupBlends(true);
         osg::Vec3f movement(0.f, 0.f, 0.f);
         AnimStateMap::iterator stateiter = mStates.begin();
         while (stateiter != mStates.end())
@@ -1544,6 +1559,10 @@ namespace MWRender
 
     void Animation::setObjectRoot(const std::string& model, bool forceskeleton, bool baseonly, bool isCreature)
     {
+        // A new skeleton: the old ragdoll callbacks belong to the old nodes (the next ragdoll pose re-creates them)
+        mRagdollBones.clear();
+        mRagdoll = false;
+        mGetupBlends.clear();
         osg::ref_ptr<osg::StateSet> previousStateset;
         if (mObjectRoot)
         {
@@ -1877,6 +1896,395 @@ namespace MWRender
         if (std::optional<osg::Matrixf> transform = getNodeWorldTransform("Head"))
             return transform;
         return getNodeWorldTransform("Bip01 Head");
+    }
+
+    const osg::Node* Animation::findNodeAnywhere(std::string_view name) const
+    {
+        if (const osg::Node* node = getNode(name))
+            return node;
+        if (!mObjectRoot)
+            return nullptr;
+        const std::string key = Misc::StringUtils::lowerCase(name);
+        auto it = mExtraNodes.find(key);
+        if (it != mExtraNodes.end())
+        {
+            osg::ref_ptr<const osg::Node> locked;
+            if (it->second.lock(locked) && locked->getNumParents() > 0)
+                return locked.get();
+            mExtraNodes.erase(it);
+        }
+        SceneUtil::FindByNameVisitor visitor(name);
+        mObjectRoot->accept(visitor);
+        if (visitor.mFoundNode == nullptr)
+            return nullptr;
+        mExtraNodes[key] = visitor.mFoundNode;
+        return visitor.mFoundNode;
+    }
+
+    // NerevarMoon: read-only bone transform for Lua (animation.getBoneTransform)
+    std::optional<osg::Matrixf> Animation::getBoneWorldTransform(std::string_view bone) const
+    {
+        const osg::Node* node = getNode(bone);
+        if (!node)
+            return std::nullopt;
+        osg::NodePathList nodepaths = node->getParentalNodePaths();
+        if (nodepaths.empty())
+            return std::nullopt;
+        return osg::computeLocalToWorld(nodepaths[0]);
+    }
+
+    namespace
+    {
+        // Bones a ragdoll can use, in the order of MWPhysics::makeRagdoll
+        constexpr std::string_view sRagdollBones[] = { "Bip01 Pelvis", "Bip01 Spine", "Bip01 Spine1", "Bip01 Spine2",
+            "Bip01 Head", "Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand", "Bip01 R UpperArm",
+            "Bip01 R Forearm", "Bip01 R Hand", "Bip01 L Thigh", "Bip01 L Calf", "Bip01 L Foot", "Bip01 R Thigh",
+            "Bip01 R Calf", "Bip01 R Foot" };
+    }
+
+    std::vector<MWPhysics::RagdollBone> Animation::getRagdollBones() const
+    {
+        std::vector<MWPhysics::RagdollBone> bones;
+        if (!mObjectRoot)
+            return bones;
+        const NodeMap& nodes = getNodeMap();
+        for (std::string_view name : sRagdollBones)
+        {
+            auto found = nodes.find(name);
+            if (found == nodes.end())
+                continue;
+            const std::optional<osg::Matrixf> world = getBoneWorldTransform(name);
+            if (!world)
+                continue;
+            MWPhysics::RagdollBone bone{ found->second->getName(), {}, *world, *world };
+            // Nearest ancestor that is a ragdoll bone too
+            for (const osg::Node* parent = found->second->getNumParents() ? found->second->getParent(0) : nullptr;
+                 parent != nullptr && bone.mParent.empty();
+                 parent = parent->getNumParents() ? parent->getParent(0) : nullptr)
+                for (const MWPhysics::RagdollBone& other : bones)
+                    if (Misc::StringUtils::ciEqual(other.mName, parent->getName()))
+                        bone.mParent = other.mName;
+            bones.push_back(std::move(bone));
+        }
+        return bones;
+    }
+
+    RagdollBoneCallback* Animation::ragdollCallback(const std::string& bone)
+    {
+        if (auto found = mRagdollBones.find(bone); found != mRagdollBones.end())
+            return found->second.get();
+        auto node = getNodeMap().find(bone);
+        if (node == getNodeMap().end())
+            return nullptr;
+        if (!mRagdoll)
+        {
+            // First ragdoll bone: every animation stops, all bones keep their last pose
+            for (auto& [owner, callback] : mActiveControllers)
+                owner->removeUpdateCallback(callback);
+            mActiveControllers.clear();
+            mStates.clear();
+            mAccumCtrl = nullptr;
+            mRagdoll = true;
+            mGetupBlends.clear(); // their nodes get the ragdoll callback in place of every callback
+        }
+        osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+        callback->setLocal(node->second->getMatrix());
+        if (auto scaled = mBoneScales.find(bone); scaled != mBoneScales.end())
+            callback->setScale(scaled->second);
+        node->second->setUpdateCallback(callback); // drops keyframe, blend and rotate controllers of this bone
+        mRagdollBones[bone] = callback;
+        return callback.get();
+    }
+
+    void Animation::setRagdollPose(const std::vector<std::pair<std::string, osg::Matrixf>>& relativeToBase)
+    {
+        for (const auto& [bone, matrix] : relativeToBase)
+            if (RagdollBoneCallback* callback = ragdollCallback(bone))
+                callback->setRelative(matrix, mInsert.get());
+    }
+
+    void Animation::clearRagdoll()
+    {
+        if (!mRagdoll)
+            return;
+        for (const auto& [bone, callback] : mRagdollBones)
+        {
+            auto node = getNodeMap().find(bone);
+            if (node != getNodeMap().end() && node->second->getUpdateCallback() == callback.get())
+                node->second->setUpdateCallback(nullptr);
+        }
+        mRagdollBones.clear();
+        mRagdoll = false;
+        clearGetupBlends(false);
+    }
+
+    namespace
+    {
+        // stump cap rim radius in metres for a 0.86 m pelvis-to-head actor (close to joltragdoll.cpp's radii)
+        float capRadiusMetres(std::string_view cap)
+        {
+            if (cap == "neck")
+                return 0.06f;
+            if (cap == "wrist")
+                return 0.035f;
+            if (cap == "elbow")
+                return 0.04f;
+            if (cap == "shoulder")
+                return 0.05f;
+            if (cap == "knee")
+                return 0.055f;
+            if (cap == "hip")
+                return 0.075f;
+            return 0.11f; // waist
+        }
+
+        osg::Matrixf worldMatrixOf(const osg::Node* node)
+        {
+            const osg::NodePathList paths = node->getParentalNodePaths();
+            return paths.empty() ? osg::Matrixf() : osg::Matrixf(osg::computeLocalToWorld(paths[0]));
+        }
+
+        class StripUpdateCallbacks : public osg::NodeVisitor
+        {
+        public:
+            StripUpdateCallbacks()
+                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
+            {
+            }
+            void apply(osg::Node& node) override
+            {
+                node.setUpdateCallback(nullptr);
+                traverse(node);
+            }
+        };
+    }
+
+    RagdollBoneCallback* Animation::holdBone(std::string_view bone, float scale)
+    {
+        auto node = getNodeMap().find(bone);
+        if (node == getNodeMap().end())
+            return nullptr;
+        osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+        callback->setLocal(node->second->getMatrix());
+        callback->setScale(scale);
+        node->second->addUpdateCallback(callback);
+        mBoneHolds.emplace_back(node->second, callback);
+        return callback.get();
+    }
+
+    bool Animation::fillSeverGeometry(Piece piece, SeverResult& result) const
+    {
+        const auto& bones = pieceBones(piece);
+        auto root = getNodeMap().find(bones.front());
+        if (root == getNodeMap().end())
+            return false;
+        const osg::Matrixf rootWorld = worldMatrixOf(root->second);
+        const float boneScale = rootWorld.getScale().x();
+        const float radius = capRadiusMetres(pieceCap(piece)) * 70.f * std::max(boneScale, 0.1f);
+        osg::Vec3f start = rootWorld.getTrans(), end = start;
+        // the axis runs from the cut bone to the piece's end bone (the torso: up to the head, not to a hand)
+        if (const std::string_view endBone = pieceEndBone(piece); !endBone.empty())
+            if (auto found = getNodeMap().find(endBone); found != getNodeMap().end() && found->second != root->second)
+                end = worldMatrixOf(found->second).getTrans();
+        osg::Vec3f axis = end - start;
+        if (axis.length() < radius)
+        {
+            // one bone: along the bone, away from its parent
+            axis = rootWorld.getRotate() * osg::Vec3f(1.f, 0.f, 0.f);
+            axis.normalize();
+            axis *= radius * 2.5f;
+            end = start + axis;
+        }
+        osg::Vec3f dir = axis;
+        dir.normalize();
+        result.mCentre = (start + end) * 0.5f;
+        result.mRotation.makeRotate(osg::Vec3f(0.f, 1.f, 0.f), dir);
+        result.mRadius = radius;
+        result.mHalfHeight = axis.length() * 0.5f;
+        result.mRootWorld = mInsert ? worldMatrixOf(mInsert) : osg::Matrixf();
+        return true;
+    }
+
+    osg::Quat Animation::boneWorldRotation(std::string_view bone) const
+    {
+        auto node = getNodeMap().find(bone);
+        return node == getNodeMap().end() ? osg::Quat() : worldMatrixOf(node->second).getRotate();
+    }
+
+    osg::ref_ptr<osg::Node> Animation::attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld,
+        const osg::Quat& boneRotation, Piece piece, bool crushed, bool bodySide)
+    {
+        osg::Group* bone = boneNode ? boneNode->asGroup() : nullptr;
+        if (bone == nullptr)
+            return nullptr;
+        std::string model = "meshes/nm/dismember/cap_" + std::string(pieceCap(piece)) + (crushed ? "_crushed" : "") + ".nif";
+        osg::ref_ptr<osg::Node> cap;
+        try
+        {
+            cap = mResourceSystem->getSceneManager()->getInstance(VFS::Path::toNormalized(model));
+        }
+        catch (const std::exception& e)
+        {
+            Log(Debug::Warning) << "[dismember] no cap " << model << ": " << e.what();
+            return nullptr;
+        }
+        // cap +y along `outwardWorld`, rim radius scaled to the bone in world units
+        // the bone's own world scale (actor and race size) applies on top of the holder's
+        const float radius = capRadiusMetres(pieceCap(piece)) * 70.f * 1.15f;
+        osg::Quat toOutward;
+        toOutward.makeRotate(osg::Vec3f(0.f, 1.f, 0.f), outwardWorld);
+        // row vectors: v * local * boneRotation = v * toOutward
+        const osg::Matrixf local
+            = osg::Matrixf::rotate(toOutward) * osg::Matrixf::inverse(osg::Matrixf::rotate(boneRotation));
+        osg::ref_ptr<osg::MatrixTransform> holder
+            = new osg::MatrixTransform(osg::Matrixf::scale(radius, radius, radius) * local);
+        holder->setName(std::string(bodySide ? "NM_Cap_body_" : "NM_Cap_piece_") + std::string(pieceName(piece)));
+        holder->addChild(cap);
+        bone->addChild(holder);
+        if (bodySide)
+        {
+            // a bigger cut takes the smaller pieces' stumps with it
+            for (const auto& [smaller, node] : mBodyCaps)
+                if (smaller != piece && pieceContains(piece, smaller))
+                    node->setNodeMask(0);
+            mBodyCaps.emplace_back(piece, holder);
+        }
+        return holder;
+    }
+
+    std::optional<Animation::SeverResult> Animation::sever(Piece piece, bool crushed, bool makeClone)
+    {
+        // creatures: one skinned mesh, so the head is scaled away on its bone and no clone is made
+        if (piece != Piece::Head || !canSever(piece, mSevered))
+            return std::nullopt;
+        SeverResult result;
+        if (!fillSeverGeometry(piece, result))
+            return std::nullopt;
+        mBoneScales["Bip01 Head"] = 0.001f;
+        holdBone("Bip01 Head", 0.001f);
+        mSevered.push_back(piece);
+        if (auto neck = getNodeMap().find("Bip01 Neck"); neck != getNodeMap().end())
+            attachCap(neck->second, result.mRotation * osg::Vec3f(0.f, 1.f, 0.f), boneWorldRotation("Bip01 Neck"), piece,
+                crushed, true);
+        return result;
+    }
+
+    bool Animation::isSevered(Piece piece) const
+    {
+        return std::find(mSevered.begin(), mSevered.end(), piece) != mSevered.end();
+    }
+
+    void Animation::setLowerBodyLocked(bool locked)
+    {
+        for (const auto& [node, callback] : mLowerBodyHolds)
+            node->removeUpdateCallback(callback);
+        mLowerBodyHolds.clear();
+        if (!locked)
+            return;
+        for (std::string_view bone : { "Bip01 Pelvis", "Bip01 L Thigh", "Bip01 L Calf", "Bip01 L Foot",
+                 "Bip01 R Thigh", "Bip01 R Calf", "Bip01 R Foot" })
+        {
+            auto node = getNodeMap().find(bone);
+            if (node == getNodeMap().end())
+                continue;
+            osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+            callback->setLocal(node->second->getMatrix());
+            node->second->addUpdateCallback(callback);
+            mLowerBodyHolds.emplace_back(node->second, callback);
+        }
+    }
+
+    void Animation::clearGetupBlends(bool onlyDone)
+    {
+        std::erase_if(mGetupBlends, [&](const auto& entry) {
+            if (onlyDone && !entry.second->blendDone())
+                return false;
+            entry.first->removeUpdateCallback(entry.second);
+            return true;
+        });
+    }
+
+    float Animation::getupStart(std::string_view group) const
+    {
+        for (auto iter = mAnimSources.rbegin(); iter != mAnimSources.rend(); ++iter)
+        {
+            const SceneUtil::TextKeyMap& keys = (*iter)->getTextKeys();
+            const auto startKey = keys.findGroupStart(group);
+            if (startKey == keys.end())
+                continue;
+            const std::string stopName = std::string(group) + ": stop";
+            float stop = -1.f;
+            for (auto key = startKey; key != keys.end(); ++key)
+                if (Misc::StringUtils::ciEqual(key->second, stopName))
+                {
+                    stop = key->first;
+                    break;
+                }
+            const float start = startKey->first;
+            if (stop <= start)
+                return 0.6f;
+            // Morrowind KFs may carry the body height on Bip01 or on Bip01 Pelvis: the track that moves most
+            const SceneUtil::KeyframeController* best = nullptr;
+            float bestRange = 1.f;
+            for (const auto& [bone, controller] : (*iter)->mKeyframes->mKeyframeControllers)
+            {
+                if (!Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis") && !Misc::StringUtils::ciEqual(bone, "Bip01"))
+                    continue;
+                float low = std::numeric_limits<float>::max(), high = std::numeric_limits<float>::lowest();
+                for (float time = start; time <= stop; time += 1.f / 30.f)
+                {
+                    const float z = controller->getTranslation(time).z();
+                    low = std::min(low, z);
+                    high = std::max(high, z);
+                }
+                if (high - low > bestRange)
+                {
+                    bestRange = high - low;
+                    best = controller.get();
+                }
+            }
+            if (best == nullptr)
+                return 0.6f;
+            const float t
+                = findGetupStart([&](float time) { return best->getTranslation(time).z(); }, start, stop);
+            return (t - start) / (stop - start);
+        }
+        return 0.6f;
+    }
+
+    void Animation::startGetup(std::string_view group, float startPoint, float blend)
+    {
+        std::vector<std::pair<std::string, osg::Matrixf>> poses;
+        for (const auto& [bone, callback] : mRagdollBones)
+            if (callback->relative())
+                poses.emplace_back(bone, *callback->relative());
+        clearRagdoll();
+        play(group, MWMechanics::Priority_Knockdown, BlendMask_All, true, 1.f, "start", "stop", startPoint, 0);
+        for (const auto& [bone, relative] : poses)
+        {
+            auto node = getNodeMap().find(bone);
+            if (node == getNodeMap().end())
+                continue;
+            osg::ref_ptr<RagdollBoneCallback> callback = new RagdollBoneCallback;
+            callback->setBlend(relative, mInsert.get(), blend);
+            node->second->addUpdateCallback(callback);
+            mGetupBlends.emplace_back(node->second, callback);
+        }
+    }
+
+    bool Animation::hasBonePhysics(std::string_view bone) const
+    {
+        const osg::Node* node = findNodeAnywhere(bone);
+        if (node == nullptr)
+            return false;
+        const osg::Callback* cb = node->getUpdateCallback();
+        while (cb)
+        {
+            if (dynamic_cast<const SceneUtil::BonePhysicsController*>(cb))
+                return true;
+            cb = cb->getNestedCallback();
+        }
+        return false;
     }
 
     void Animation::setAlpha(float actorFade, float alpha)

@@ -55,6 +55,7 @@ namespace MWMechanics
         bool mAlarmed = false;
         bool mAttacked = false;
         bool mKnockdown = false;
+        float mTimeScale = 1.f; // NerevarMoon: per-actor time scale from Lua, not saved
         bool mKnockdownOneFrame = false;
         bool mKnockdownOverOneFrame = false;
         bool mHitRecovery = false;
@@ -219,6 +220,8 @@ namespace MWMechanics
         /// Returns true for the entire duration of the actor being knocked down or knocked out,
         /// including transition animations (falling down & standing up)
         bool getKnockedDown() const;
+        float getTimeScale() const { return mTimeScale; } // NerevarMoon
+        void setTimeScale(float value) { mTimeScale = value; } // NerevarMoon
         void setKnockedDownOneFrame(bool value);
         /// Returns true only for the first frame of the actor being knocked out; used for "onKnockedOut" command
         bool getKnockedDownOneFrame() const;

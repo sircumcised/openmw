@@ -61,7 +61,8 @@ namespace SDLUtil
 
     bool isWindowShown(SDL_WindowFlags flags)
     {
-        return (flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) == 0;
+        // NerevarMoon: an occluded window keeps the game running, as upstream SDL2 did
+        return (flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED)) == 0;
     }
 
     void setVideoMode(SDL_Window* window, int width, int height, Settings::WindowMode windowMode, bool windowBorder)

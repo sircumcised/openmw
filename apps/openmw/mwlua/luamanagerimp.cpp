@@ -19,6 +19,7 @@
 #include <components/esm3/esmwriter.hpp>
 
 #include <components/misc/framestats.hpp>
+#include <components/lua/luatiming.hpp>
 #include <components/settings/values.hpp>
 
 #include <components/l10n/manager.hpp>
@@ -131,6 +132,9 @@ namespace MWLua
     void LuaManager::initConfiguration(bool reload)
     {
         mConfiguration.init(MWBase::Environment::get().getESMStore()->getLuaScriptsCfg(), reload);
+        // NerevarMoon: lua timing log rows are keyed by script index, which a reload can change.
+        LuaUtil::LuaTiming::reset();
+        mTimingFrames = 0;
         Log(Debug::Verbose) << "Lua scripts configuration (" << mConfiguration.size() << " scripts):";
         for (size_t i = 0; i < mConfiguration.size(); ++i)
             Log(Debug::Verbose) << "#" << i << " " << LuaUtil::scriptCfgToString(mConfiguration[i]);
@@ -247,8 +251,35 @@ namespace MWLua
 
     void LuaManager::update()
     {
+        // NerevarMoon: lua timing log. Script index -2 is the GC step.
+        LuaUtil::LuaTiming::sEnabled = Settings::lua().mLuaTimingLog;
+        if (const int steps = Settings::lua().mGcStepsPerFrame; steps > 0)
+        {
+            const auto gcStart = std::chrono::steady_clock::now();
+            lua_gc(mLua.unsafeState(), LUA_GCSTEP, steps);
+            if (LuaUtil::LuaTiming::sEnabled)
+                LuaUtil::LuaTiming::add(
+                    -2, "[gc]", std::chrono::duration<double>(std::chrono::steady_clock::now() - gcStart).count());
+        }
+
         if (mPlayer.isEmpty())
             return; // The game is not started yet.
+
+        if (LuaUtil::LuaTiming::sEnabled)
+        {
+            LuaUtil::LuaTiming::addFrame();
+            if (++mTimingFrames >= 600)
+            {
+                mTimingFrames = 0;
+                const auto scriptName = [this](int i) -> std::string {
+                    if (i < 0 || static_cast<std::size_t>(i) >= mConfiguration.size())
+                        return "[gc]";
+                    return std::string(mConfiguration[i].mScriptPath.value());
+                };
+                for (const std::string& line : LuaUtil::LuaTiming::formatAndReset(scriptName))
+                    Log(Debug::Info) << line;
+            }
+        }
 
         MWWorld::Ptr newPlayerPtr = MWBase::Environment::get().getWorld()->getPlayerPtr();
         if (!(getId(mPlayer) == getId(newPlayerPtr)))
@@ -468,6 +499,9 @@ namespace MWLua
         mObjectLists.objectAddedToScene(ptr);
         mObjectLists.setPlayer(ptr);
         mPlayer = ptr;
+        // NerevarMoon: drop menu-time [gc] and onFrame entries so the first block counts in-game frames only.
+        LuaUtil::LuaTiming::reset();
+        mTimingFrames = 0;
         LocalScripts* localScripts = ptr.getRefData().getLuaScripts();
         if (!localScripts)
         {
@@ -722,7 +756,7 @@ namespace MWLua
 
     void LuaManager::onHit(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim, const MWWorld::Ptr& weapon,
         const MWWorld::Ptr& ammo, int attackType, float attackStrength, float attackWindUp, float damage, bool isHealth,
-        const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType sourceType)
+        const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType sourceType, bool critical, bool blocked)
     {
         mLua.protectedCall([&](LuaUtil::LuaView& view) {
             sol::table damageTable = view.newTable();
@@ -744,6 +778,8 @@ namespace MWLua
             data["damage"] = damageTable;
             data["hitPos"] = hitPos;
             data["successful"] = successful;
+            data["critical"] = critical; // NerevarMoon
+            data["blocked"] = blocked; // NerevarMoon
             switch (sourceType)
             {
                 case MWMechanics::DamageSourceType::Unspecified:

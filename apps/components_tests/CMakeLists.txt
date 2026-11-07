@@ -20,6 +20,7 @@ file(GLOB UNITTEST_SRC_FILES
     lua/testinputactions.cpp
     lua/testl10n.cpp
     lua/testlua.cpp
+    lua/testluatiming.cpp
     lua/testscriptscontainer.cpp
     lua/testserialization.cpp
     lua/teststorage.cpp
@@ -122,6 +123,7 @@ file(GLOB UNITTEST_SRC_FILES
     sceneutil/osgacontroller.cpp
     sceneutil/paintedtexture.cpp
     sceneutil/userdata.cpp
+    sceneutil/testbonephysicsmath.cpp
 
     bsa/testbsafile.cpp
     bsa/testcompressedbsafile.cpp

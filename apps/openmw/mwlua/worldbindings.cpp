@@ -1,6 +1,8 @@
 #include "worldbindings.hpp"
 
+#include <components/debug/debuglog.hpp>
 #include <components/esm3/loadacti.hpp>
+#include <components/settings/values.hpp>
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadarmo.hpp>
 #include <components/esm3/loadbook.hpp>
@@ -26,6 +28,7 @@
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
+#include "../mwmechanics/creaturestats.hpp"
 #include "../mwworld/action.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/datetimemanager.hpp"
@@ -308,6 +311,39 @@ namespace MWLua
                     objPtr.getClass().activate(objPtr, actorPtr)->execute(actorPtr);
                 },
                 "_runStandardActivationAction");
+        };
+        // NerevarMoon: Jolt dynamic bodies
+        api["physicsAvailable"] = Settings::physics().mJolt.get(); // the world may not exist yet here
+        api["physicsSetDynamic"] = [context](const GObject& object, sol::optional<osg::Vec3f> velocity) {
+            std::optional<osg::Vec3f> v;
+            if (velocity)
+                v = *velocity;
+            context.mLuaManager->addAction(
+                [object, v] {
+                    const MWWorld::Ptr& ptr = object.ptr();
+                    if (!MWBase::Environment::get().getWorld()->setDynamic(ptr, v))
+                        Log(Debug::Warning) << "physicsSetDynamic: " << ptr.toString() << " cannot be simulated";
+                },
+                "physicsSetDynamic");
+        };
+        // NerevarMoon: ragdolls
+        api["isRagdoll"] = [](const GObject& actor) -> bool {
+            const MWWorld::Ptr& ptr = actor.ptr();
+            return ptr.getClass().isActor() && MWBase::Environment::get().getWorld()->isRagdoll(ptr);
+        };
+        api["physicsImpulse"]
+            = [context](const GObject& actor, const osg::Vec3f& impulse, sol::optional<std::string> bone) -> bool {
+            const MWWorld::Ptr& ptr = actor.ptr();
+            if (!ptr.getClass().isActor()
+                || !(ptr.getClass().getCreatureStats(ptr).isDead()
+                    || MWBase::Environment::get().getWorld()->isKnockdownRagdoll(ptr)))
+                return false;
+            context.mLuaManager->addAction(
+                [actor, impulse, name = bone.value_or(std::string())] {
+                    MWBase::Environment::get().getWorld()->ragdollImpulse(actor.ptr(), impulse, name);
+                },
+                "physicsImpulse");
+            return true;
         };
         api["_runStandardUseAction"] = [context](const GObject& object, const GObject& actor, bool force) {
             context.mLuaManager->addAction(

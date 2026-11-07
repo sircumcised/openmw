@@ -24,6 +24,7 @@
 #include <components/misc/resourcehelpers.hpp>
 #include <components/misc/strings/conversion.hpp>
 #include <components/resource/bulletshapemanager.hpp>
+#include <components/sceneutil/bonephysics.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/settings/values.hpp>
 
@@ -127,15 +128,31 @@ namespace MWPhysics
         }
 
         mTaskScheduler = std::make_unique<PhysicsTaskScheduler>(mPhysicsDt, mCollisionWorld.get());
+        if (Settings::physics().mJolt) // NerevarMoon
+            mJolt = std::make_unique<JoltWorld>();
+
+        // NerevarMoon: bone chains (bonephysics) ask the world for floors and walls through this ray
+        SceneUtil::BonePhysicsController::setWorldRay(
+            [this](const osg::Vec3f& from, const osg::Vec3f& to, osg::Vec3f& hitPos, osg::Vec3f& hitNormal) {
+                const RayCastingResult result = castRay(
+                    from, to, {}, {}, CollisionType_World | CollisionType_HeightMap | CollisionType_Door);
+                if (!result.mHit)
+                    return false;
+                hitPos = result.mHitPos;
+                hitNormal = result.mHitNormal;
+                return true;
+            });
     }
 
     PhysicsSystem::~PhysicsSystem()
     {
+        SceneUtil::BonePhysicsController::setWorldRay(nullptr); // NerevarMoon
         mResourceSystem->removeResourceManager(mShapeManager.get());
 
         if (mWaterCollisionObject)
             mTaskScheduler->removeCollisionObject(mWaterCollisionObject.get());
 
+        mJolt.reset(); // NerevarMoon
         mTaskScheduler->releaseSharedStates();
         mHeightFields.clear();
         mObjects.clear();
@@ -382,10 +399,14 @@ namespace MWPhysics
     {
         mHeightFields[std::make_pair(x, y)] = std::make_unique<HeightField>(
             heights, x, y, size, verts, minH, maxH, std::move(holdObject), mTaskScheduler.get());
+        if (mJolt)
+            mJolt->addHeightField(heights, x, y, size, verts);
     }
 
     void PhysicsSystem::removeHeightField(int x, int y)
     {
+        if (mJolt)
+            mJolt->removeHeightField(x, y);
         HeightFieldMap::iterator heightfield = mHeightFields.find(std::make_pair(x, y));
         if (heightfield != mHeightFields.end())
             mHeightFields.erase(heightfield);
@@ -432,10 +453,47 @@ namespace MWPhysics
 
         if (obj->isAnimated())
             mAnimatedObjects.emplace(obj.get(), false);
+        else if (mJolt && (collisionType & (CollisionType_World | CollisionType_Door)))
+            addJoltStatic(ptr, rotation);
+    }
+
+    void PhysicsSystem::addJoltStatic(const MWWorld::Ptr& ptr, const osg::Quat& rotation)
+    {
+        const Object* obj = getObject(ptr);
+        if (!mJolt || !obj || obj->isAnimated() || !obj->getShapeInstance()->getSource())
+            return;
+        mJolt->addStatic(ptr, *obj->getShapeInstance()->getSource(), ptr.getRefData().getPosition().asVec3(),
+            rotation, ptr.getCellRef().getScale());
+    }
+
+    bool PhysicsSystem::setDynamic(const MWWorld::Ptr& ptr, const osg::Vec3f& halfExtents, const osg::Vec3f& centre,
+        const osg::Vec3f& velocity)
+    {
+        if (!mJolt)
+            return false;
+        return mJolt->addDynamic(ptr, halfExtents, centre, ptr.getRefData().getPosition().asVec3(),
+            Misc::Convert::makeOsgQuat(ptr.getRefData().getPosition()), velocity);
+    }
+
+    void PhysicsSystem::stopDynamic(const MWWorld::Ptr& ptr)
+    {
+        if (!mJolt)
+            return;
+        mJolt->remove(ptr);
+        addJoltStatic(ptr, Misc::Convert::makeOsgQuat(ptr.getRefData().getPosition()));
+    }
+
+    std::vector<JoltWorld::Moved> PhysicsSystem::stepDynamics(float dt)
+    {
+        if (!mJolt)
+            return {};
+        return mJolt->step(dt);
     }
 
     void PhysicsSystem::remove(const MWWorld::Ptr& ptr)
     {
+        if (mJolt)
+            mJolt->remove(ptr);
         if (auto foundObject = mObjects.find(ptr.mRef); foundObject != mObjects.end())
         {
             mAnimatedObjects.erase(foundObject->second.get());
@@ -457,6 +515,8 @@ namespace MWPhysics
 
     void PhysicsSystem::updatePtr(const MWWorld::Ptr& old, const MWWorld::Ptr& updated)
     {
+        if (mJolt)
+            mJolt->updatePtr(old, updated);
         if (auto foundObject = mObjects.find(old.mRef); foundObject != mObjects.end())
             foundObject->second->updatePtr(updated);
         else if (auto foundActor = mActors.find(old.mRef); foundActor != mActors.end())
@@ -515,6 +575,8 @@ namespace MWPhysics
             foundObject->second->setScale(scale);
             // At once: a shape holds its own scale, and the caller reads the object's bounds next.
             mTaskScheduler->updateSingleAabb(foundObject->second, true);
+            if (mJolt)
+                mJolt->setStaticScale(ptr, scale);
         }
         else if (auto foundActor = mActors.find(ptr.mRef); foundActor != mActors.end())
         {
@@ -529,6 +591,8 @@ namespace MWPhysics
         {
             foundObject->second->setRotation(rotate);
             mTaskScheduler->updateSingleAabb(foundObject->second);
+            if (mJolt)
+                mJolt->setStaticRotation(ptr, rotate);
         }
         else if (auto foundActor = mActors.find(ptr.mRef); foundActor != mActors.end())
         {
@@ -546,6 +610,8 @@ namespace MWPhysics
         {
             foundObject->second->updatePosition();
             mTaskScheduler->updateSingleAabb(foundObject->second);
+            if (mJolt)
+                mJolt->setStaticPosition(ptr, ptr.getRefData().getPosition().asVec3());
         }
         else if (auto foundActor = mActors.find(ptr.mRef); foundActor != mActors.end())
         {

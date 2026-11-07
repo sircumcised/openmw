@@ -21,6 +21,7 @@ namespace Settings
         SettingValue<bool> mLuaDebug{ mIndex, "Lua", "lua debug" };
         SettingValue<int> mLuaNumThreads{ mIndex, "Lua", "lua num threads", makeEnumSanitizerInt({ 0, 1 }) };
         SettingValue<bool> mLuaProfiler{ mIndex, "Lua", "lua profiler" };
+        SettingValue<bool> mLuaTimingLog{ mIndex, "Lua", "lua timing log" }; // NerevarMoon
         SettingValue<std::uint64_t> mSmallAllocMaxSize{ mIndex, "Lua", "small alloc max size" };
         SettingValue<std::uint64_t> mMemoryLimit{ mIndex, "Lua", "memory limit" };
         SettingValue<bool> mLogMemoryUsage{ mIndex, "Lua", "log memory usage" };

@@ -59,7 +59,7 @@ list(APPEND COMPONENT_FILES "${OpenMW_BINARY_DIR}/${OSG_PLUGIN_CHECKER_CPP_FILE}
 
 add_component_dir (lua
     luastate scriptscontainer asyncpackage utilpackage serialization configuration l10n storage utf8
-    shapes/box inputactions yamlloader scripttracker luastateptr
+    shapes/box inputactions yamlloader scripttracker luastateptr luatiming
     )
 copy_resource_file("lua/util.lua" "${OPENMW_RESOURCES_ROOT}" "resources/lua_libs/util.lua")
 
@@ -143,7 +143,7 @@ add_component_dir (sceneutil
     detourdebugdraw navmesh agentpath animblendrules shadow mwshadowtechnique recastmesh shadowsbin osgacontroller rtt
     screencapture depth color riggeometryosgaextension extradata unrefqueue lightcommon clearcolor
     cullsafeboundsvisitor keyframe nodecallback templateref textkeymap userdata glextensions fog texmat material
-    offscreenframing imageregion paintedtexture stableidentity lampbody embeddedimage
+    offscreenframing imageregion paintedtexture stableidentity lampbody embeddedimage bonephysics
     )
 
 add_component_dir (nif
@@ -188,7 +188,7 @@ add_component_dir (esm3
     loadweap aipackage effectlist spelllist variant variantimp loadtes3 cellref filter
     savedgame journalentry queststate locals globalscript player objectstate cellid cellstate globalmap
     inventorystate containerstate npcstate creaturestate dialoguestate statstate npcstats creaturestats
-    weatherstate quickkeys fogstate spellstate activespells creaturelevliststate doorstate projectilestate debugprofile
+    weatherstate quickkeys fogstate spellstate activespells creaturelevliststate doorstate projectilestate ragdollstate gibstate debugprofile
     aisequence magiceffects custommarkerstate stolenitems transport animationstate controlsstate mappings readerscache
     infoorder timestamp formatversion landrecorddata selectiongroup dialoguecondition
     refnum actoridconverter

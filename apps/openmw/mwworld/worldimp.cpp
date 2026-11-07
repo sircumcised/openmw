@@ -14,6 +14,9 @@
 #include <components/esm3/cellref.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
+#include <components/esm3/gibstate.hpp>
+#include <components/esm3/loadmisc.hpp>
+#include <components/esm3/ragdollstate.hpp>
 #include <components/esm3/loadclas.hpp>
 #include <components/esm3/loadcrea.hpp>
 #include <components/esm3/loadench.hpp>
@@ -369,6 +372,9 @@ namespace MWWorld
         mWeatherManager->clear();
         mRendering->clear();
         mProjectileManager->clear();
+        mRagdollStates.clear();
+        mGibs.clear();
+        mKnockdowns.clear(); // RefNums repeat across loads: an old knockdown must not reach the loaded actor
         mLocalScripts.clear();
 
         mWorldScene->clear();
@@ -404,7 +410,8 @@ namespace MWWorld
             + 1 // weather record
             + 1 // levitation/teleport enabled state
             + 1 // camera
-            + 1; // random state.
+            + 1 // random state.
+            + mRagdollStates.size() + mGibs.size();
     }
 
     size_t World::countSavedGameCells() const
@@ -440,6 +447,19 @@ namespace MWWorld
         writer.startRecord(ESM::REC_CAM_);
         writer.writeHNT("FIRS", isFirstPerson());
         writer.endRecord(ESM::REC_CAM_);
+
+        for (const auto& [actor, state] : mRagdollStates)
+        {
+            writer.startRecord(ESM::REC_NMRD);
+            state.save(writer);
+            writer.endRecord(ESM::REC_NMRD);
+        }
+        for (const ESM::GibState& gib : mGibs)
+        {
+            writer.startRecord(ESM::REC_NMGB);
+            gib.save(writer);
+            writer.endRecord(ESM::REC_NMGB);
+        }
     }
 
     void World::readRecord(ESM::ESMReader& reader, uint32_t type)
@@ -449,6 +469,22 @@ namespace MWWorld
             case ESM::REC_ACTC:
                 reader.skipRecord();
                 return;
+            case ESM::REC_NMGB:
+            {
+                ESM::GibState gib;
+                gib.load(reader);
+                if (gib.mActor.isSet())
+                    mGibs.push_back(std::move(gib));
+                return;
+            }
+            case ESM::REC_NMRD:
+            {
+                ESM::RagdollState state;
+                state.load(reader);
+                if (state.mActor.isSet())
+                    mRagdollStates[state.mActor] = std::move(state);
+                return;
+            }
             case ESM::REC_ENAB:
                 reader.getHNT(mTeleportEnabled, "TELE");
                 reader.getHNT(mLevitationEnabled, "LEVT");
@@ -1408,6 +1444,556 @@ namespace MWWorld
         mProjectileManager->processHits();
         mDiscardMovements = false;
         mPhysics->moveActors();
+
+        // NerevarMoon: Jolt dynamic bodies move their objects; settled ones become normal objects again
+        for (const MWPhysics::JoltWorld::Moved& moved : mPhysics->stepDynamics(duration))
+        {
+            const Ptr ptr = moveObject(moved.mPtr, moved.mPosition);
+            rotateObject(ptr, Misc::toEulerAnglesZYX(moved.mRotation), MWBase::RotationFlag_none);
+            if (moved.mSettled)
+                mPhysics->stopDynamic(ptr);
+        }
+
+        // NerevarMoon: ragdolls pose their skeletons and drag the actor along with the pelvis
+        applyRagdollStates(duration);
+        applyGibs(duration);
+        if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+        {
+            for (const MWPhysics::JoltWorld::RagdollPose& pose : jolt->takeRagdollPoses())
+            {
+                Ptr ptr = pose.mPtr;
+                MWRender::Animation* animation = ptr.isEmpty() ? nullptr : getAnimation(ptr);
+                if (animation == nullptr || !ptr.isInCell() || !ptr.getRefData().isEnabled())
+                    continue;
+                ptr = moveObject(ptr, pose.mLowest);
+                // Moving may have put the actor out of the active cells: its animation is gone then
+                animation = getAnimation(ptr);
+                osg::Node* base = ptr.getRefData().getBaseNode();
+                if (animation == nullptr || base == nullptr || base->getParentalNodePaths().empty())
+                    continue;
+                const osg::Matrixf toBase = osg::Matrixf::inverse(osg::computeLocalToWorld(base->getParentalNodePaths()[0]));
+                std::vector<std::pair<std::string, osg::Matrixf>> relative;
+                ESM::RagdollState state;
+                state.mActor = ptr.getCellRef().getRefNum();
+                for (const auto& [bone, world] : pose.mWorld)
+                {
+                    const osg::Matrixf m = world * toBase;
+                    relative.emplace_back(bone, m);
+                    osg::Vec3f translation, scale;
+                    osg::Quat rotation, scaleOrientation;
+                    m.decompose(translation, rotation, scale, scaleOrientation);
+                    state.mBones.push_back(ESM::RagdollState::Bone{ bone, rotation, translation });
+                }
+                animation->setRagdollPose(relative);
+                if (auto knockdown = mKnockdowns.find(state.mActor); state.mActor.isSet() && knockdown != mKnockdowns.end())
+                {
+                    knockdown->second.mAsleep = pose.mAsleep;
+                    knockdown->second.mRolling = pose.mRolling;
+                    knockdown->second.mFrozen |= pose.mFrozen;
+                    knockdown->second.mWorld = pose.mWorld;
+                }
+                // Keep a corpse's pose for saves and for the next visit of the cell (never a knocked down actor's)
+                if (state.mActor.isSet() && ptr.getClass().getCreatureStats(ptr).isDead())
+                    mRagdollStates[state.mActor] = std::move(state);
+                if (pose.mFallSpeed)
+                {
+                    const float mass = 70.f * std::pow(ptr.getCellRef().getScale(), 3.f);
+                    const ESM::RefId sound = ESM::RefId::stringRefId(mass < 50.f ? "Body Fall Small"
+                            : mass < 90.f                                    ? "Body Fall Medium"
+                                                                             : "Body Fall Large");
+                    MWBase::Environment::get().getSoundManager()->playSound3D(
+                        ptr, sound, std::min(*pose.mFallSpeed / 600.f, 1.f), 1.f);
+                }
+                if (pose.mFrozen)
+                    Log(Debug::Info) << "[ragdoll] frozen " << ptr.getCellRef().getRefId();
+            }
+        }
+        updateKnockdowns(duration);
+    }
+
+    void World::updateKnockdowns(float duration)
+    {
+        MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        for (auto it = mKnockdowns.begin(); it != mKnockdowns.end();)
+        {
+            Knockdown& knockdown = it->second;
+            const Ptr ptr = mWorldModel.getPtr(it->first);
+            MWRender::Animation* animation = ptr.isEmpty() ? nullptr : getAnimation(ptr);
+            if (jolt == nullptr || animation == nullptr || !ptr.isInCell())
+            {
+                // Out of the active cells: the engine's own knockdown takes over when the actor is seen again
+                if (!ptr.isEmpty() && jolt != nullptr)
+                    jolt->dropRagdoll(ptr);
+                it = mKnockdowns.erase(it);
+                continue;
+            }
+            MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+            if (stats.isDead())
+            {
+                // startRagdoll erases the entry when it takes over; still here: no death ragdoll (scripted animation,
+                // water), so the knockdown body ends now and kill() can finish the death
+                if (jolt->isRagdollActive(ptr))
+                    jolt->freezeRagdoll(ptr);
+                if (MWPhysics::Actor* physicActor = mPhysics->getActor(ptr))
+                    physicActor->setProjectileCollision(false);
+                it = mKnockdowns.erase(it);
+                continue;
+            }
+            knockdown.mTime += duration;
+            using Phase = Knockdown::Phase;
+            switch (knockdown.mPhase)
+            {
+                case Phase::Falling:
+                {
+                    // Hit again while falling: the engine set hit recovery; the body takes the blow instead
+                    if (stats.getHitRecovery() && jolt->isRagdollActive(ptr))
+                    {
+                        jolt->applyRagdollImpulse(ptr, knockdownImpulse(ptr), "");
+                        stats.setHitRecovery(false);
+                    }
+                    if (knockdown.mFrozen)
+                    {
+                        knockdown.mPhase = Phase::Resting;
+                        knockdown.mTime = 0.f;
+                        break;
+                    }
+                    const bool done = knockdown.mKnockout
+                        ? (knockdown.mAsleep || knockdown.mTime >= 6.f)
+                        : ((knockdown.mAsleep && knockdown.mTime >= 1.f) || knockdown.mTime >= 2.f);
+                    if (!done)
+                        break;
+                    if (jolt->rollToBack(ptr))
+                    {
+                        Log(Debug::Info) << "[ragdoll] roll " << ptr.getCellRef().getRefId();
+                        knockdown.mPhase = Phase::Rolling;
+                        knockdown.mRolling = true;
+                        knockdown.mTime = 0.f;
+                    }
+                    else
+                        endKnockdownFall(ptr, knockdown);
+                    break;
+                }
+                case Phase::Rolling:
+                    if (knockdown.mFrozen || !knockdown.mRolling || knockdown.mTime >= 0.7f)
+                        endKnockdownFall(ptr, knockdown);
+                    break;
+                case Phase::Resting:
+                    // Knockout: the engine's rule, fatigue back to zero or more
+                    if (!knockdown.mKnockout || stats.getFatigue().getCurrent() >= 0)
+                        beginGetup(ptr, knockdown);
+                    break;
+                case Phase::GettingUp:
+                    if (!animation->isPlaying("knockdown") || knockdown.mTime >= 4.f)
+                    {
+                        it = mKnockdowns.erase(it);
+                        continue;
+                    }
+                    break;
+            }
+            ++it;
+        }
+    }
+
+    void World::endKnockdownFall(const Ptr& actor, Knockdown& knockdown)
+    {
+        if (!knockdown.mKnockout)
+        {
+            beginGetup(actor, knockdown);
+            return;
+        }
+        // Knocked out: the body stays in its pose until the fatigue comes back
+        if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+            jolt->freezeRagdoll(actor);
+        knockdown.mPhase = Knockdown::Phase::Resting;
+        knockdown.mTime = 0.f;
+    }
+
+    void World::beginGetup(const Ptr& actor, Knockdown& knockdown)
+    {
+        knockdown.mPhase = Knockdown::Phase::GettingUp;
+        knockdown.mTime = 0.f;
+        if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+            jolt->dropRagdoll(actor);
+        setKnockdownCollision(actor, false);
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr)
+            return;
+        osg::Vec3f pelvis, head;
+        bool hasPelvis = false, hasHead = false;
+        for (const auto& [bone, world] : knockdown.mWorld)
+        {
+            if (Misc::StringUtils::ciEqual(bone, "Bip01 Pelvis"))
+            {
+                pelvis = world.getTrans();
+                hasPelvis = true;
+            }
+            else if (Misc::StringUtils::ciEqual(bone, "Bip01 Head"))
+            {
+                head = world.getTrans();
+                hasHead = true;
+            }
+        }
+        // The knockdown animation lies on its back with the feet ahead: the actor faces from the head to the pelvis
+        osg::Vec3f feet = pelvis - head;
+        feet.z() = 0.f;
+        if (hasPelvis && hasHead && feet.normalize() > 0.f)
+        {
+            const float yaw = std::atan2(feet.x(), feet.y());
+            rotateObject(actor, osg::Vec3f(0.f, 0.f, yaw), MWBase::RotationFlag_none);
+            // The physics pose stays where it was in the world: relative to the turned base now
+            osg::Node* base = actor.getRefData().getBaseNode();
+            if (base != nullptr && !base->getParentalNodePaths().empty())
+            {
+                const osg::Matrixf toBase
+                    = osg::Matrixf::inverse(osg::computeLocalToWorld(base->getParentalNodePaths()[0]));
+                std::vector<std::pair<std::string, osg::Matrixf>> relative;
+                for (const auto& [bone, world] : knockdown.mWorld)
+                    relative.emplace_back(bone, world * toBase);
+                if (animation->isRagdoll())
+                    animation->setRagdollPose(relative);
+            }
+        }
+        const float start = animation->getupStart("knockdown");
+        animation->startGetup("knockdown", start, 0.3f);
+        Log(Debug::Info) << "[ragdoll] getup " << actor.getCellRef().getRefId() << " from " << start;
+    }
+
+    void World::applyRagdollStates(float duration)
+    {
+        mRagdollApplyTimer += duration;
+        if (mRagdollApplyTimer < 0.5f || mRagdollStates.empty())
+            return;
+        mRagdollApplyTimer = 0.f;
+        for (auto it = mRagdollStates.begin(); it != mRagdollStates.end();)
+        {
+            const Ptr ptr = mWorldModel.getPtr(it->first);
+            if (ptr.isEmpty() || !ptr.isInCell() || !ptr.getClass().isActor())
+            {
+                ++it;
+                continue;
+            }
+            if (!ptr.getClass().getCreatureStats(ptr).isDead())
+            {
+                it = mRagdollStates.erase(it); // resurrected
+                continue;
+            }
+            applyRagdollState(ptr, it->second);
+            ++it;
+        }
+    }
+
+    bool World::applyRagdollState(const Ptr& actor, const ESM::RagdollState& state)
+    {
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr || animation->isRagdoll())
+            return false;
+        // Bones missing from this skeleton are skipped; no pelvis: the death animation stays
+        std::vector<std::pair<std::string, osg::Matrixf>> relative;
+        bool hasPelvis = false;
+        for (const ESM::RagdollState::Bone& bone : state.mBones)
+        {
+            relative.emplace_back(bone.mName,
+                osg::Matrixf::rotate(osg::Quat(bone.mRotation)) * osg::Matrixf::translate(osg::Vec3f(bone.mPosition)));
+            hasPelvis |= Misc::StringUtils::ciEqual(bone.mName, "Bip01 Pelvis");
+        }
+        if (!hasPelvis)
+            return false;
+        animation->setRagdollPose(relative);
+        return true;
+    }
+
+    bool World::startRagdoll(const Ptr& actor)
+    {
+        MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        if (jolt == nullptr || !Settings::physics().mRagdoll || !actor.getClass().isActor() || !actor.isInCell()
+            || isSwimming(actor))
+            return false;
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr)
+            return false;
+        // killed while down: the fall goes on as a death, and a corpse stops taking arrows
+        if (mKnockdowns.erase(actor.getCellRef().getRefNum()) > 0)
+            if (MWPhysics::Actor* physicActor = mPhysics->getActor(actor))
+                physicActor->setProjectileCollision(false);
+        // A corpse that already fell (save made during the fall, cell visited again): its pose, no new fall
+        if (auto saved = mRagdollStates.find(actor.getCellRef().getRefNum()); saved != mRagdollStates.end())
+        {
+            if (animation->isRagdoll() || applyRagdollState(actor, saved->second))
+            {
+                enableActorCollision(actor, false);
+                return true;
+            }
+        }
+        const std::vector<MWPhysics::RagdollBone> bones = animation->getRagdollBones();
+
+        // The blow: from the last attacker towards the victim, harder for a charged attack
+        osg::Vec3f impulse(0.f, 0.f, 60.f);
+        const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
+        const Ptr attacker = mWorldModel.getPtr(stats.getHitAttemptActor());
+        if (!attacker.isEmpty() && attacker != actor)
+        {
+            osg::Vec3f dir = actor.getRefData().getPosition().asVec3() - attacker.getRefData().getPosition().asVec3();
+            dir.z() = 0.f;
+            if (dir.normalize() > 0.f)
+            {
+                const float strength = std::clamp(
+                    MWBase::Environment::get().getMechanicsManager()->getAttackStrength(attacker), 0.f, 1.f);
+                impulse += dir * (250.f + 350.f * strength);
+            }
+        }
+        const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
+        if (!jolt->addRagdoll(actor, bones, 1.f / 60.f, impulse, mass))
+            return false;
+        enableActorCollision(actor, false); // no standing Bullet capsule over the falling body
+
+        // The first step of this frame poses the skeleton and stops the animation (World::doPhysics)
+        Log(Debug::Info) << "[ragdoll] start " << actor.getCellRef().getRefId() << " bones=" << bones.size();
+        return true;
+    }
+
+    void World::stopRagdoll(const Ptr& actor)
+    {
+        if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+            jolt->dropRagdoll(actor);
+        mRagdollStates.erase(actor.getCellRef().getRefNum());
+        if (MWRender::Animation* animation = getAnimation(actor))
+            animation->clearRagdoll();
+    }
+
+    bool World::isRagdoll(const Ptr& actor)
+    {
+        const MWRender::Animation* animation = actor.isEmpty() ? nullptr : getAnimation(actor);
+        return animation != nullptr && animation->isRagdoll();
+    }
+
+    bool World::isRagdollFalling(const Ptr& actor) const
+    {
+        const MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        return jolt != nullptr && jolt->isRagdollActive(actor) && !isKnockdownRagdoll(actor);
+    }
+
+    // The blow, weaker than a death blow: from the last attacker, harder for a charged attack
+    osg::Vec3f World::knockdownImpulse(const Ptr& actor)
+    {
+        const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
+        const Ptr attacker = mWorldModel.getPtr(stats.getHitAttemptActor());
+        if (attacker.isEmpty() || attacker == actor)
+            return osg::Vec3f();
+        osg::Vec3f dir = actor.getRefData().getPosition().asVec3() - attacker.getRefData().getPosition().asVec3();
+        dir.z() = 0.f;
+        if (dir.normalize() <= 0.f)
+            return osg::Vec3f();
+        const float strength
+            = std::clamp(MWBase::Environment::get().getMechanicsManager()->getAttackStrength(attacker), 0.f, 1.f);
+        return dir * (150.f + 250.f * strength) + osg::Vec3f(0.f, 0.f, 40.f);
+    }
+
+    // Down: no standing capsule for actors and doors, but arrows and bolts still hit the actor
+    void World::setKnockdownCollision(const Ptr& actor, bool down)
+    {
+        enableActorCollision(actor, !down);
+        if (MWPhysics::Actor* physicActor = mPhysics->getActor(actor))
+            physicActor->setProjectileCollision(down);
+    }
+
+    namespace
+    {
+        // the piece's clone sits on the object so that the piece at the actor (`geometry`) lands on the object
+        void attachGibClone(const MWWorld::Ptr& object, const osg::ref_ptr<osg::Node>& clone,
+            const MWRender::Animation::SeverResult& geometry)
+        {
+            osg::Group* base = object.getRefData().getBaseNode() ? object.getRefData().getBaseNode()->asGroup() : nullptr;
+            if (base == nullptr || clone == nullptr)
+                return;
+            for (unsigned int i = 0; i < base->getNumChildren(); ++i)
+                base->getChild(i)->setNodeMask(0); // the generic gib mesh, while the real piece shows
+            const osg::Matrixf pieceFrame
+                = osg::Matrixf::rotate(geometry.mRotation) * osg::Matrixf::translate(geometry.mCentre);
+            osg::ref_ptr<osg::MatrixTransform> holder
+                = new osg::MatrixTransform(geometry.mRootWorld * osg::Matrixf::inverse(pieceFrame));
+            holder->setName("NM_GibClone");
+            holder->addChild(clone);
+            base->addChild(holder);
+        }
+
+        bool hasGibClone(const MWWorld::Ptr& object)
+        {
+            osg::Group* base = object.getRefData().getBaseNode() ? object.getRefData().getBaseNode()->asGroup() : nullptr;
+            if (base == nullptr)
+                return true;
+            for (unsigned int i = 0; i < base->getNumChildren(); ++i)
+                if (base->getChild(i)->getName() == "NM_GibClone")
+                    return true;
+            return false;
+        }
+    }
+
+    bool World::sever(const Ptr& actor, std::string_view pieceName, const osg::Vec3f& impulse, bool crushed, bool silent)
+    {
+        const std::optional<MWRender::Piece> piece = MWRender::parsePiece(pieceName);
+        if (!piece || actor.isEmpty() || !actor.getClass().isActor() || actor == getPlayerPtr() || !actor.isInCell())
+            return false;
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr)
+            return false;
+        const bool npc = actor.getClass().isNpc();
+        std::optional<MWRender::Animation::SeverResult> result = animation->sever(*piece, crushed, npc && !silent);
+        if (!result)
+            return false;
+        ESM::GibState gib;
+        gib.mActor = actor.getCellRef().getRefNum();
+        gib.mPiece = std::string(pieceName);
+        gib.mCrushed = crushed;
+        Log(Debug::Info) << "[dismember] sever " << actor.getCellRef().getRefId() << " " << pieceName;
+        if (!silent)
+        {
+            ESM::RefId recordId = ESM::RefId::stringRefId("nm_gib_" + std::string(pieceName));
+            if (mStore.get<ESM::Miscellaneous>().search(recordId) == nullptr)
+            {
+                Log(Debug::Warning) << "[dismember] no record " << recordId << ", using misc_dwrv_artifact00";
+                recordId = ESM::RefId::stringRefId("misc_dwrv_artifact00");
+            }
+            MWWorld::ManualRef ref(mStore, recordId);
+            ESM::Position pos;
+            const osg::Vec3f euler = Misc::toEulerAnglesZYX(result->mRotation);
+            for (int i = 0; i < 3; ++i)
+            {
+                pos.pos[i] = result->mCentre[i];
+                pos.rot[i] = euler[i];
+            }
+            const Ptr object = placeObject(ref.getPtr(), actor.getCell(), pos);
+            if (!object.isEmpty())
+            {
+                gib.mObject = object.getCellRef().getRefNum();
+                attachGibClone(object, result->mClone, *result);
+                if (MWPhysics::JoltWorld* jolt = mPhysics->getJolt())
+                    jolt->addDynamicCapsule(
+                        object, result->mRadius, result->mHalfHeight, result->mCentre, result->mRotation, impulse);
+            }
+        }
+        if (gib.mActor.isSet())
+            mGibs.push_back(std::move(gib));
+        return true;
+    }
+
+    bool World::isSevered(const Ptr& actor, std::string_view pieceName)
+    {
+        const std::optional<MWRender::Piece> piece = MWRender::parsePiece(pieceName);
+        const MWRender::Animation* animation = actor.isEmpty() ? nullptr : getAnimation(actor);
+        return piece && animation != nullptr && animation->isSevered(*piece);
+    }
+
+    void World::setLowerBodyLocked(const Ptr& actor, bool locked)
+    {
+        if (MWRender::Animation* animation = actor.isEmpty() ? nullptr : getAnimation(actor))
+            animation->setLowerBodyLocked(locked);
+    }
+
+    void World::applyGibs(float duration)
+    {
+        mGibApplyTimer += duration;
+        if (mGibApplyTimer < 0.5f || mGibs.empty())
+            return;
+        mGibApplyTimer = 0.f;
+        // a reloaded actor gets its pieces cut again, a reloaded piece gets the actor's meshes again
+        for (const ESM::GibState& gib : mGibs)
+        {
+            const std::optional<MWRender::Piece> piece = MWRender::parsePiece(gib.mPiece);
+            const Ptr actor = mWorldModel.getPtr(gib.mActor);
+            if (!piece || actor.isEmpty() || !actor.isInCell() || !actor.getClass().isActor())
+                continue;
+            MWRender::Animation* animation = getAnimation(actor);
+            if (animation == nullptr)
+                continue;
+            if (!animation->isSevered(*piece))
+                animation->sever(*piece, gib.mCrushed, false);
+            if (!gib.mObject.isSet())
+                continue;
+            const Ptr object = mWorldModel.getPtr(gib.mObject);
+            if (object.isEmpty() || !object.isInCell() || hasGibClone(object))
+                continue;
+            MWRender::Animation::SeverResult geometry;
+            if (animation->fillSeverGeometry(*piece, geometry))
+                attachGibClone(object, animation->clonePiece(*piece, gib.mCrushed), geometry);
+        }
+    }
+
+    bool World::isKnockdownRagdoll(const Ptr& actor) const
+    {
+        return !actor.isEmpty() && mKnockdowns.count(actor.getCellRef().getRefNum()) > 0;
+    }
+
+    bool World::startKnockdownRagdoll(const Ptr& actor, bool knockout)
+    {
+        MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        if (jolt == nullptr || !Settings::physics().mRagdoll || !actor.getClass().isActor() || !actor.isInCell()
+            || isSwimming(actor))
+            return false;
+        const ESM::RefNum refNum = actor.getCellRef().getRefNum();
+        if (!refNum.isSet())
+            return false;
+        if (mKnockdowns.count(refNum))
+            return true;
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr || animation->isRagdoll())
+            return false;
+        const std::vector<MWPhysics::RagdollBone> bones = animation->getRagdollBones();
+
+        const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
+        if (!jolt->addRagdoll(
+                actor, bones, 1.f / 60.f, knockdownImpulse(actor), mass, MWPhysics::JoltWorld::RagdollMode::Knockdown))
+            return false;
+        setKnockdownCollision(actor, true);
+        Knockdown& knockdown = mKnockdowns[refNum];
+        knockdown = Knockdown{};
+        knockdown.mKnockout = knockout;
+        Log(Debug::Info) << "[ragdoll] knockdown " << actor.getCellRef().getRefId() << " bones=" << bones.size();
+        return true;
+    }
+
+    bool World::ragdollImpulse(const Ptr& actor, const osg::Vec3f& impulse, std::string_view bone)
+    {
+        MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+        if (jolt == nullptr || !isRagdoll(actor))
+            return false;
+        if (jolt->applyRagdollImpulse(actor, impulse, bone))
+            return true;
+        if (isKnockdownRagdoll(actor))
+            return false; // knocked out and resting: no new fall
+        // Frozen corpse: a new fall from its current pose
+        MWRender::Animation* animation = getAnimation(actor);
+        const float mass = 70.f * std::pow(actor.getCellRef().getScale(), 3.f);
+        if (!jolt->addRagdoll(actor, animation->getRagdollBones(), 1.f / 60.f, osg::Vec3f(), mass))
+            return false;
+        return jolt->applyRagdollImpulse(actor, impulse, bone);
+    }
+
+    bool World::physicsAvailable() const
+    {
+        return mPhysics->getJolt() != nullptr;
+    }
+
+    bool World::setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity)
+    {
+        if (!velocity)
+        {
+            mPhysics->stopDynamic(ptr);
+            return true;
+        }
+        if (!physicsAvailable() || ptr.getClass().isActor() || !ptr.isInCell())
+            return false;
+        osg::Group* node = ptr.getRefData().getBaseNode() ? ptr.getRefData().getBaseNode()->asGroup() : nullptr;
+        if (!node)
+            return false;
+        // bounds in object space: the base node's own transform (position, rotation, scale) is left out
+        osg::ComputeBoundsVisitor computeBounds;
+        for (unsigned int i = 0; i < node->getNumChildren(); ++i)
+            node->getChild(i)->accept(computeBounds);
+        const osg::BoundingBox& box = computeBounds.getBoundingBox();
+        if (!box.valid())
+            return false;
+        const float scale = ptr.getCellRef().getScale();
+        return mPhysics->setDynamic(ptr, (box._max - box._min) * 0.5f * scale, box.center() * scale, *velocity);
     }
 
     void World::updateNavigator()

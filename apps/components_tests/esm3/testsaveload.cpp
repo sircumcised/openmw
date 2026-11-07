@@ -20,6 +20,7 @@
 #include <components/esm3/loadweap.hpp>
 #include <components/esm3/player.hpp>
 #include <components/esm3/quickkeys.hpp>
+#include <components/esm3/ragdollstate.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -403,6 +404,28 @@ namespace ESM
             saveAndLoadRecord(record, GetParam(), result);
             EXPECT_EQ(record.mLastHitAttemptObject, result.mLastHitAttemptObject);
             EXPECT_EQ(record.mLastHitObject, result.mLastHitObject);
+        }
+
+        TEST_P(Esm3SaveLoadRecordTest, ragdollStateShouldNotChange)
+        {
+            RagdollState record;
+            record.mActor = RefNum{ .mIndex = 42, .mContentFile = 3 };
+            for (int i = 0; i < 16; ++i)
+                record.mBones.push_back(RagdollState::Bone{ "Bip01 Bone " + std::to_string(i),
+                    Quaternion(osg::Quat(0.1 * i, osg::Vec3f(0.f, 0.6f, 0.8f))),
+                    Vector3(osg::Vec3f(1.5f * i, -2.f, 90.f)) });
+            RagdollState result;
+            saveAndLoadRecord(record, GetParam(), result);
+            EXPECT_EQ(result.mActor, record.mActor);
+            EXPECT_EQ(result.mBones.size(), record.mBones.size());
+            for (std::size_t i = 0; i < record.mBones.size(); ++i)
+            {
+                EXPECT_EQ(result.mBones[i].mName, record.mBones[i].mName);
+                for (int v = 0; v < 4; ++v)
+                    EXPECT_EQ(result.mBones[i].mRotation.mValues[v], record.mBones[i].mRotation.mValues[v]);
+                for (int v = 0; v < 3; ++v)
+                    EXPECT_EQ(result.mBones[i].mPosition.mValues[v], record.mBones[i].mPosition.mValues[v]);
+            }
         }
 
         TEST_P(Esm3SaveLoadRecordTest, containerShouldNotChange)

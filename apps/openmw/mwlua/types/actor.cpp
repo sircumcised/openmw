@@ -1,5 +1,6 @@
 #include "types.hpp"
 
+#include <algorithm>
 #include <array>
 
 #include <components/detournavigator/agentbounds.hpp>
@@ -14,6 +15,7 @@
 #include "apps/openmw/mwmechanics/actorutil.hpp"
 #include "apps/openmw/mwmechanics/creaturestats.hpp"
 #include "apps/openmw/mwmechanics/drawstate.hpp"
+#include "apps/openmw/mwrender/dismember.hpp"
 #include "apps/openmw/mwworld/class.hpp"
 #include "apps/openmw/mwworld/inventorystore.hpp"
 #include "apps/openmw/mwworld/worldmodel.hpp"
@@ -472,17 +474,127 @@ namespace MWLua
                 }
             }
 
+            // NerevarMoon: critical and blocked come from Npc::hit / Creature::hit through the Hit event
+            const bool critical = options.get_or("critical", false);
+            const bool blocked = options.get_or("blocked", false);
             context.mLuaManager->addAction(
-                [self = Object(self), damages = std::move(damageCpp),
+                [context, self = Object(self), damages = std::move(damageCpp),
                     attacker = options.get<sol::optional<Object>>("attacker"), weaponId,
-                    successful = options.get<bool>("successful"), sourceType = sourceType] {
+                    successful = options.get<bool>("successful"), sourceType = sourceType,
+                    sourceTypeStr = std::move(sourceTypeStr), critical, blocked] {
                     MWWorld::Ptr attackerPtr;
                     MWWorld::Ptr weaponPtr;
                     if (attacker)
-                        attackerPtr = attacker->ptr();
-                    self.ptr().getClass().onHit(self.ptr(), damages, weaponId, attackerPtr, successful, sourceType);
+                        attackerPtr = attacker->ptrOrEmpty();
+                    const MWWorld::Ptr victim = self.ptr();
+                    MWMechanics::CreatureStats& stats = victim.getClass().getCreatureStats(victim);
+                    const float healthBefore = stats.getHealth().getCurrent();
+                    const bool wasDead = stats.isDead();
+                    const bool wasDown = stats.getKnockedDown();
+                    victim.getClass().onHit(victim, damages, weaponId, attackerPtr, successful, sourceType);
+
+                    // NerevarMoon: NMHitResult, the outcome after the engine applied the hit (same frame as the
+                    // health change), to the victim and to the attacker
+                    const float damage = std::max(healthBefore - stats.getHealth().getCurrent(), 0.f);
+                    const bool killed = !wasDead && stats.isDead();
+                    const bool knockdown = !wasDown && stats.getKnockedDown();
+                    context.mLua->protectedCall([&](LuaUtil::LuaView& view) {
+                        sol::table result = view.newTable();
+                        result["victim"] = LObject(victim);
+                        if (!attackerPtr.isEmpty())
+                            result["attacker"] = LObject(attackerPtr);
+                        result["damage"] = damage;
+                        result["killed"] = killed;
+                        result["blocked"] = blocked;
+                        result["critical"] = critical;
+                        result["knockdown"] = knockdown;
+                        result["successful"] = successful;
+                        result["sourceType"] = sourceTypeStr;
+                        if (!weaponId.empty())
+                            result["weapon"] = weaponId.serializeText();
+                        context.mLuaManager->sendLocalEvent(victim, "NMHitResult", result);
+                        if (!attackerPtr.isEmpty() && attackerPtr != victim
+                            && attackerPtr.getRefData().getLuaScripts())
+                            context.mLuaManager->sendLocalEvent(attackerPtr, "NMHitResult", result);
+                    });
                 },
                 "HitAction");
+        };
+        actor["hitResult"] = true; // NerevarMoon marker: the NMHitResult event exists
+
+        // NerevarMoon: knockdown state and trigger
+        actor["isKnockedDown"] = [](const Object& o) {
+            const MWWorld::Ptr& ptr = o.ptr();
+            return ptr.getClass().getCreatureStats(ptr).getKnockedDown();
+        };
+        actor["isKnockedOut"] = [](const Object& o) {
+            const MWMechanics::CreatureStats& stats = o.ptr().getClass().getCreatureStats(o.ptr());
+            // same rule as CharacterController: fatigue below zero, or a zero fatigue base
+            return stats.getKnockedDown()
+                && (stats.getFatigue().getCurrent() < 0 || stats.getFatigue().getBase() == 0);
+        };
+        // NerevarMoon: the body is a ragdoll (dead, or knocked down and not yet getting up)
+        // NerevarMoon dismemberment
+        actor["sever"] = [context](const Object& o, std::string_view piece, sol::optional<osg::Vec3f> impulse,
+                             sol::optional<sol::table> options) {
+            if (!MWRender::parsePiece(piece))
+                throw std::runtime_error("Unknown piece: " + std::string(piece));
+            const MWWorld::Ptr& ptr = o.ptr();
+            if (!ptr.getClass().isActor() || ptr == MWBase::Environment::get().getWorld()->getPlayerPtr())
+                return false;
+            const bool crushed = options && options->get_or("crushed", false);
+            const bool silent = options && options->get_or("silent", false);
+            context.mLuaManager->addAction(
+                [obj = Object(o), name = std::string(piece), push = impulse.value_or(osg::Vec3f()), crushed, silent] {
+                    const MWWorld::Ptr target = obj.ptrOrEmpty();
+                    if (!target.isEmpty())
+                        MWBase::Environment::get().getWorld()->sever(target, name, push, crushed, silent);
+                },
+                "SeverAction");
+            return true;
+        };
+        actor["isSevered"] = [](const Object& o, std::string_view piece) {
+            return MWBase::Environment::get().getWorld()->isSevered(o.ptr(), piece);
+        };
+        actor["setLowerBodyLocked"] = [context](const Object& o, bool locked) {
+            context.mLuaManager->addAction(
+                [obj = Object(o), locked] {
+                    const MWWorld::Ptr target = obj.ptrOrEmpty();
+                    if (!target.isEmpty())
+                        MWBase::Environment::get().getWorld()->setLowerBodyLocked(target, locked);
+                },
+                "LowerBodyLockAction");
+        };
+        actor["isRagdoll"] = [](const Object& o) {
+            const MWWorld::Ptr& ptr = o.ptr();
+            return ptr.getClass().isActor() && MWBase::Environment::get().getWorld()->isRagdoll(ptr);
+        };
+        actor["knockDown"] = [context](const Object& o) {
+            context.mLuaManager->addAction(
+                [obj = Object(o)] {
+                    const MWWorld::Ptr ptr = obj.ptrOrEmpty();
+                    if (ptr.isEmpty())
+                        return;
+                    MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+                    if (!stats.isDead() && !stats.getKnockedDown())
+                        stats.setKnockedDown(true);
+                },
+                "KnockDownAction");
+        };
+
+        // NerevarMoon: per-actor time scale in [0, 2] for animation, turning and movement speed; not saved
+        actor["getTimeScale"] = [](const Object& o) {
+            return o.ptr().getClass().getCreatureStats(o.ptr()).getTimeScale();
+        };
+        actor["setTimeScale"] = [context](const Object& o, Misc::FiniteFloat scale) {
+            const float value = std::clamp(static_cast<float>(scale), 0.f, 2.f);
+            context.mLuaManager->addAction(
+                [obj = Object(o), value] {
+                    const MWWorld::Ptr ptr = obj.ptrOrEmpty();
+                    if (!ptr.isEmpty())
+                        ptr.getClass().getCreatureStats(ptr).setTimeScale(value);
+                },
+                "SetTimeScaleAction");
         };
 
         actor["setKnockedDown"] = [context](const Object& object, bool value) {

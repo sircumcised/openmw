@@ -197,7 +197,8 @@ namespace MWRender
 
         mFog = std::make_unique<FogManager>();
 
-        auto mask = ~(Mask_UpdateVisitor | Mask_SimpleWater);
+        // NerevarMoon: Bodyview hides the player's head with Mask_PlayerHidden
+        auto mask = ~(Mask_UpdateVisitor | Mask_SimpleWater | Mask_PlayerHidden);
         mRenderer.setViewMask(mask);
         NifOsg::Loader::setHiddenNodeMask(Mask_UpdateVisitor);
         NifOsg::Loader::setIntersectionDisabledNodeMask(Mask_Effect);

@@ -1,5 +1,7 @@
 #include "animationbindings.hpp"
 
+#include <optional>
+
 #include <components/lua/luastate.hpp>
 #include <components/lua/utilpackage.hpp>
 #include <components/misc/finitevalues.hpp>
@@ -8,7 +10,10 @@
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwmechanics/actorutil.hpp"
 #include "../mwmechanics/character.hpp"
+
+#include "../mwrender/npcanimation.hpp"
 
 #include "context.hpp"
 #include "luamanagerimp.hpp"
@@ -251,6 +256,38 @@ namespace MWLua
                 },
                 "addGlowAction");
         };
+        // NerevarMoon: is the node (skeleton, attached weapon or worn part) driven by the bone physics solver
+        api["hasBonePhysics"] = [](const LObject& object, std::string_view bonename) -> bool {
+            return getConstAnimationOrThrow(object)->hasBonePhysics(bonename);
+        };
+
+        // NerevarMoon: world transform of a bone, nil when the bone or the model is missing
+        api["getBoneTransform"]
+            = [](const LObject& object, std::string_view bonename) -> sol::optional<LuaUtil::TransformM> {
+            const MWRender::Animation* anim = MWBase::Environment::get().getWorld()->getAnimation(object.ptr());
+            if (!anim)
+                return sol::nullopt;
+            std::optional<osg::Matrixf> m = anim->getBoneWorldTransform(bonename);
+            if (!m)
+                return sol::nullopt;
+            return LuaUtil::asTransform(*m);
+        };
+
+        // NerevarMoon: player head, hair and helmet hidden from the main camera (Bodyview), marked by
+        // animation.bodyview
+        api["bodyview"] = true;
+        api["setHeadHidden"] = [context](const SelfObject& object, bool hidden) {
+            if (object.ptr() != MWMechanics::getPlayer())
+                throw std::runtime_error("setHeadHidden is only available for the player");
+            context.mLuaManager->addAction(
+                [object = Object(object), hidden] {
+                    if (auto* anim = dynamic_cast<MWRender::NpcAnimation*>(getMutableAnimationOrThrow(object)))
+                        anim->setHeadHidden(hidden);
+                },
+                "setHeadHiddenAction");
+        };
+
+        api["vfxOffset"] = true;
         api["addVfx"] = [context](const SelfObject& object, std::string_view model, sol::optional<sol::table> options) {
             if (options)
             {
@@ -262,6 +299,12 @@ namespace MWLua
                     transform = osg::Matrix(LuaUtil::cast<LuaUtil::TransformQ>(transformObject).mQ);
                 if (transform.has_value() && !transform->valid())
                     throw std::runtime_error("Transform provided for 'addVfx' is invalid");
+                // NerevarMoon: options.offset places the model in the bone's space, marked by animation.vfxOffset
+                sol::object offsetObj = (*options)["offset"];
+                if (offsetObj.is<LuaUtil::TransformQ>())
+                    transform = osg::Matrix(offsetObj.as<LuaUtil::TransformQ>().mQ);
+                else if (offsetObj.get_type() != sol::type::lua_nil)
+                    transform = LuaUtil::cast<LuaUtil::TransformM>(offsetObj).mM;
 
                 context.mLuaManager->addAction(
                     [object = Object(object), model = std::string(model),

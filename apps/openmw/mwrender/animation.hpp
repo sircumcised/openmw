@@ -5,8 +5,11 @@
 #include "animblendcontroller.hpp"
 #include "blendmask.hpp"
 #include "bonegroup.hpp"
+#include "dismember.hpp"
+#include "ragdollpose.hpp"
 
 #include "../mwworld/movementdirection.hpp"
+#include "../mwphysics/joltworld.hpp"
 #include "../mwworld/ptr.hpp"
 
 #include <components/misc/strings/algorithm.hpp>
@@ -15,6 +18,8 @@
 #include <components/sceneutil/nodecallback.hpp>
 #include <components/sceneutil/textkeymap.hpp>
 #include <components/sceneutil/util.hpp>
+
+#include <osg/observer_ptr>
 #include <components/vfs/pathutil.hpp>
 
 #include <map>
@@ -24,6 +29,11 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+namespace osg
+{
+    class Matrixf;
+}
 
 namespace ESM
 {
@@ -236,6 +246,8 @@ namespace MWRender
 
         osg::ref_ptr<RotateController> addRotateController(std::string_view bone);
 
+        mutable std::map<std::string, osg::observer_ptr<const osg::Node>, std::less<>> mExtraNodes; // NerevarMoon
+
         bool mHasMagicEffects;
 
         osg::ref_ptr<SceneUtil::LightSource> mGlowLight;
@@ -252,6 +264,30 @@ namespace MWRender
 
         bool mPlayScriptedOnly;
         bool mRequiresBoneMap;
+
+        // NerevarMoon ragdoll: bones driven by Jolt; no animation plays while set
+        bool mRagdoll = false;
+        std::unordered_map<std::string, osg::ref_ptr<RagdollBoneCallback>, Misc::StringUtils::CiHash,
+            Misc::StringUtils::CiEqual>
+            mRagdollBones;
+        RagdollBoneCallback* ragdollCallback(const std::string& bone);
+        // Getup: blend callbacks appended after the animation callbacks of the ragdoll bones
+        std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mGetupBlends;
+        void clearGetupBlends(bool onlyDone);
+
+        // NerevarMoon dismemberment: severed pieces, bones held still (stumps, locked legs; kept last in the
+        // callback chain like the getup blends) and bones scaled away (a creature's head)
+        std::vector<Piece> mSevered;
+        std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mBoneHolds;
+        std::vector<std::pair<osg::ref_ptr<osg::Node>, osg::ref_ptr<RagdollBoneCallback>>> mLowerBodyHolds;
+        std::unordered_map<std::string, float, Misc::StringUtils::CiHash, Misc::StringUtils::CiEqual> mBoneScales;
+        RagdollBoneCallback* holdBone(std::string_view bone, float scale);
+        /// Cap on `boneNode` facing `outwardWorld`; `boneWorldRotation` is passed in because a clone's bones are not
+        /// in the scene yet. Named NM_Cap_body_<piece> (actor side) or NM_Cap_piece_<piece> (the flying piece).
+        osg::ref_ptr<osg::Node> attachCap(osg::Node* boneNode, const osg::Vec3f& outwardWorld,
+            const osg::Quat& boneWorldRotation, Piece piece, bool crushed, bool bodySide);
+        std::vector<std::pair<Piece, osg::ref_ptr<osg::Node>>> mBodyCaps;
+        osg::Quat boneWorldRotation(std::string_view bone) const;
 
         const NodeMap& getNodeMap() const;
 
@@ -465,11 +501,60 @@ namespace MWRender
 
         /// Return the world transform of the head: the "Head" node if there is one, otherwise "Bip01 Head".
         std::optional<osg::Matrixf> getHeadWorldTransform() const;
+        /// NerevarMoon: a node by name: the skeleton map first, then the whole object root (attached weapons,
+        /// worn parts). Cached per name; the cache is re-checked when the node is gone.
+        const osg::Node* findNodeAnywhere(std::string_view name) const;
+        /// NerevarMoon: is the node driven by the bone physics solver.
+        bool hasBonePhysics(std::string_view bone) const;
+        /// NerevarMoon: world transform of a bone as left by the last update traversal.
+        /// Reads only node matrices, so it is safe from the Lua thread while the frame is being drawn.
+        std::optional<osg::Matrixf> getBoneWorldTransform(std::string_view bone) const;
 
         MWWorld::MovementDirectionFlags getSupportedMovementDirections(
             std::span<const std::string_view> prefixes) const;
 
         bool getPlayScriptedOnly() const { return mPlayScriptedOnly; }
+
+        /// NerevarMoon ragdoll. The Bip01 bones a ragdoll can use, with their world transforms now (mWorldPrev is
+        /// the same: the bones' own motion is not tracked). Empty without a skeleton.
+        std::vector<MWPhysics::RagdollBone> getRagdollBones() const;
+        /// Puts the listed bones at these transforms relative to the actor's base node from now on, and stops every
+        /// animation of this actor.
+        void setRagdollPose(const std::vector<std::pair<std::string, osg::Matrixf>>& relativeToBase);
+        /// Back to normal animation (resurrection, new skeleton).
+        void clearRagdoll();
+        bool isRagdoll() const { return mRagdoll; }
+        /// NerevarMoon getup. Point (0..1 between the group's start and stop keys) where `group` rises from the
+        /// ground: last low point of the Bip01 Pelvis track (see findGetupStart); 0.6 without a pelvis track.
+        float getupStart(std::string_view group) const;
+        /// Leaves ragdoll mode, plays `group` from `startPoint` with knockdown priority and blends every ragdoll bone
+        /// from its last physics pose into the animation over `blend` seconds.
+        void startGetup(std::string_view group, float startPoint, float blend);
+        bool isGettingUp() const { return !mGetupBlends.empty(); }
+
+        /// NerevarMoon dismemberment. `mClone` shows the piece only, frozen as it is now, in the space of the
+        /// actor's base node (`mRootWorld` at the cut); null for creatures and when no clone was asked.
+        struct SeverResult
+        {
+            osg::ref_ptr<osg::Node> mClone;
+            osg::Matrixf mRootWorld;
+            osg::Vec3f mCentre; // world, game units
+            osg::Quat mRotation; // world: +y from the cut along the piece
+            float mRadius = 0.f;
+            float mHalfHeight = 0.f;
+        };
+        /// Hides the piece and caps the stump. Creatures: the head only, no clone. nullopt when the piece or a
+        /// piece holding it is already severed, or the skeleton lacks the cut bone.
+        virtual std::optional<SeverResult> sever(Piece piece, bool crushed, bool makeClone);
+        /// The piece alone, frozen in the current pose, in the base node's space (`mRootWorld`), with its cap;
+        /// works for a piece already severed (reload). Null for creatures.
+        virtual osg::ref_ptr<osg::Node> clonePiece(Piece piece, bool crushed) { return nullptr; }
+        /// Cut bone position, axis and capsule size of a piece from the current pose; false without the cut bone.
+        bool fillSeverGeometry(Piece piece, SeverResult& result) const;
+        bool isSevered(Piece piece) const;
+        const std::vector<Piece>& getSevered() const { return mSevered; }
+        /// Legs keep their current pose; the upper body still animates.
+        void setLowerBodyLocked(bool locked);
         void setPlayScriptedOnly(bool playScriptedOnly) { mPlayScriptedOnly = playScriptedOnly; }
 
         virtual bool useShieldAnimations() const { return false; }

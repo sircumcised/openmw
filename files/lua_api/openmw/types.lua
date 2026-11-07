@@ -42,6 +42,78 @@
 -- @return #boolean
 
 ---
+-- NerevarMoon: true when the local event `NMHitResult` exists. After the engine applies a hit (the same frame the
+-- health changes) it sends `NMHitResult` to the victim and, if it has Lua scripts, to the attacker, with the fields
+-- `victim`, `attacker` (or nil), `damage` (health removed, >= 0), `killed`, `blocked`, `critical` (sneak attack),
+-- `knockdown`, `successful`, `sourceType` (as in the Hit event) and `weapon` (record id or nil).
+-- @field [parent=#Actor] #boolean hitResult
+
+---
+-- NerevarMoon: is the actor knocked down (lying on the ground, also when knocked out).
+-- @function [parent=#Actor] isKnockedDown
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
+-- NerevarMoon: is the actor knocked out (knocked down with fatigue below zero).
+-- @function [parent=#Actor] isKnockedOut
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
+-- NerevarMoon: sever a piece of the actor: 'head', 'rhand', 'lhand', 'rforearm', 'lforearm', 'rarm', 'larm',
+-- 'rshin', 'lshin', 'rleg', 'lleg' or 'torso'. The piece hides on the actor (stump capped) and flies with `impulse`
+-- as an object showing the actor's own meshes; creatures lose the head only. Applied at the end of the frame.
+-- Restored after a reload (saved game record NMGB). False for the player and non-actors; an error for an unknown
+-- piece name.
+-- @function [parent=#Actor] sever
+-- @param openmw.core#GameObject actor
+-- @param #string piece
+-- @param openmw.util#Vector3 impulse (optional) units per second
+-- @param #table options (optional) `crushed` (blunt cap), `silent` (hide only: no object, no flight)
+-- @return #boolean the request was queued
+
+---
+-- NerevarMoon: is this piece of the actor severed.
+-- @function [parent=#Actor] isSevered
+-- @param openmw.core#GameObject actor
+-- @param #string piece
+-- @return #boolean
+
+---
+-- NerevarMoon: legs keep their current pose while the upper body still animates (fighting from the ground).
+-- @function [parent=#Actor] setLowerBodyLocked
+-- @param openmw.core#GameObject actor
+-- @param #boolean locked
+
+---
+-- NerevarMoon: is the actor's body a Jolt ragdoll: dead, or knocked down and not yet getting up. With the
+-- ragdoll on, a bipedal actor knocked down falls as a ragdoll, rolls onto its back and gets up through the
+-- tail of its knockdown animation.
+-- @function [parent=#Actor] isRagdoll
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
+-- NerevarMoon: knock the actor down, as a strong hit does. Applied at the start of the next frame; no effect on a
+-- dead actor or on one already down. The knockdown animation decides how long it stays down.
+-- @function [parent=#Actor] knockDown
+-- @param openmw.core#GameObject actor
+
+---
+-- NerevarMoon: per-actor time scale, 1 = normal, clamped to [0, 2]. Scales the actor's animation, turning and
+-- walking speed (swimming and flying included) (for hitstop and slow or haste effects). Applied at the start of the next frame; not saved.
+-- @function [parent=#Actor] setTimeScale
+-- @param openmw.core#GameObject actor
+-- @param #number scale
+
+---
+-- NerevarMoon: current per-actor time scale (see setTimeScale).
+-- @function [parent=#Actor] getTimeScale
+-- @param openmw.core#GameObject actor
+-- @return #number
+
+---
 -- Check if the given actor's death process is finished.
 -- @function [parent=#Actor] isDeathFinished
 -- @param openmw.core#GameObject actor

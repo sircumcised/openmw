@@ -5,6 +5,7 @@
 
 #include <components/lua/asyncpackage.hpp>
 #include <components/lua/luastate.hpp>
+#include <components/lua/luatiming.hpp>
 #include <components/lua/scriptscontainer.hpp>
 #include <components/lua/scripttracker.hpp>
 
@@ -54,6 +55,16 @@ return {
             print(' event1 ' .. tostring(eventData.x))
             return eventData.x >= 1
         end
+    }
+}
+)X");
+
+    constexpr VFS::Path::NormalizedView timingErrorPath("timingerror.lua");
+
+    VFSTestFile timingErrorScript(R"X(
+return {
+    engineHandlers = {
+        onUpdate = function() error('timing test error') end,
     }
 }
 )X");
@@ -202,6 +213,7 @@ return {
             { useInterfacePath, &useInterfaceScript },
             { unloadPath, &unloadScript },
             { customDataPath, &customDataScript },
+            { timingErrorPath, &timingErrorScript },
         });
 
         LuaUtil::ScriptsConfiguration mCfg;
@@ -224,6 +236,7 @@ CUSTOM, PLAYER: overrideInterface.lua
 CUSTOM, PLAYER: useInterface.lua
 CUSTOM: unload.lua
 CUSTOM: customdata.lua
+CUSTOM: timingError.lua
 )X");
             mCfg.init(std::move(cfg), false);
         }
@@ -709,5 +722,53 @@ CUSTOM: test1.lua
         EXPECT_NE(scriptId, newScriptId);
         EXPECT_EQ(newScriptId, 2);
         EXPECT_TRUE(scripts2.hasScript(newScriptId));
+    }
+
+    // NerevarMoon: lua timing log
+    std::vector<std::string> timingLines(const LuaUtil::ScriptsConfiguration& cfg)
+    {
+        return LuaUtil::LuaTiming::formatAndReset(
+            [&](int i) { return std::string(cfg[i].mScriptPath.value()); });
+    }
+
+    TEST_F(LuaScriptsContainerTest, TimingLogEngineHandler)
+    {
+        LuaUtil::LuaTiming::sEnabled = true;
+        LuaUtil::LuaTiming::reset();
+        LuaUtil::ScriptsContainer scripts(&mLua, "Test");
+        EXPECT_TRUE(scripts.addCustomScript(getId(test1Path)));
+        testing::internal::CaptureStdout();
+        scripts.update(0.5f);
+        internal::GetCapturedStdout();
+        EXPECT_THAT(timingLines(mCfg), Contains(StartsWith("NMLUA|test1.lua|onUpdate|calls=1|")));
+        LuaUtil::LuaTiming::sEnabled = false;
+    }
+
+    TEST_F(LuaScriptsContainerTest, TimingLogEvent)
+    {
+        LuaUtil::LuaTiming::sEnabled = true;
+        LuaUtil::LuaTiming::reset();
+        LuaUtil::ScriptsContainer scripts(&mLua, "Test");
+        EXPECT_TRUE(scripts.addCustomScript(getId(test1Path)));
+        sol::state_view sol = mLua.unsafeState();
+        testing::internal::CaptureStdout();
+        scripts.receiveEvent("Event1", LuaUtil::serialize(sol.create_table_with("x", 1.5)));
+        internal::GetCapturedStdout();
+        EXPECT_THAT(timingLines(mCfg), Contains(StartsWith("NMLUA|test1.lua|event:Event1|calls=1|")));
+        LuaUtil::LuaTiming::sEnabled = false;
+    }
+
+    TEST_F(LuaScriptsContainerTest, TimingLogSurvivesError)
+    {
+        LuaUtil::LuaTiming::sEnabled = true;
+        LuaUtil::LuaTiming::reset();
+        LuaUtil::ScriptsContainer scripts(&mLua, "Test");
+        EXPECT_TRUE(scripts.addCustomScript(getId(timingErrorPath)));
+        testing::internal::CaptureStdout();
+        scripts.update(0.5f);
+        scripts.update(0.5f);
+        internal::GetCapturedStdout();
+        EXPECT_THAT(timingLines(mCfg), Contains(StartsWith("NMLUA|timingerror.lua|onUpdate|calls=2|")));
+        LuaUtil::LuaTiming::sEnabled = false;
     }
 }

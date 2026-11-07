@@ -1740,7 +1740,9 @@ namespace MWMechanics
                     actor.setPositionAdjusted(true);
                 }
 
-                ctrl.update(duration);
+                // NerevarMoon: per-actor time scale (types.Actor.setTimeScale) slows the animation (AI decisions keep normal speed)
+                ctrl.update(
+                    duration * actor.getPtr().getClass().getCreatureStats(actor.getPtr()).getTimeScale());
 
                 updateVisibility(actor.getPtr(), ctrl);
             }
@@ -1748,7 +1750,7 @@ namespace MWMechanics
             if (playerCharacter)
             {
                 MWBase::Environment::get().getWorld()->applyDeferredPreviewRotationToPlayer(duration);
-                playerCharacter->update(duration);
+                playerCharacter->update(duration * player.getClass().getCreatureStats(player).getTimeScale()); // NerevarMoon
                 playerCharacter->setVisibility(1.f);
                 MWBase::LuaManager::ActorControls* luaControls
                     = MWBase::Environment::get().getLuaManager()->getActorControls(player);
@@ -2375,6 +2377,14 @@ namespace MWMechanics
             return false;
 
         return it->second->getCharacterController().isCastingSpell();
+    }
+
+    float Actors::getAttackStrength(const MWWorld::Ptr& ptr) const
+    {
+        const auto it = mIndex.find(ptr.mRef);
+        if (it == mIndex.end())
+            return 0.f;
+        return std::max(it->second->getCharacterController().getAttackStrength(), 0.f);
     }
 
     bool Actors::isAttackingOrSpell(const MWWorld::Ptr& ptr) const

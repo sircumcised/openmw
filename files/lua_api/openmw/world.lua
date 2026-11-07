@@ -219,6 +219,36 @@
 -- end
 
 ---
+-- NerevarMoon engine only: true when Jolt Physics simulates dynamic bodies (`[Physics] jolt` in settings.cfg).
+-- @field [parent=#world] #boolean physicsAvailable
+
+---
+-- NerevarMoon engine only: throw an object (not an actor) as a Jolt box of its visual bounds. It falls, bounces and
+-- comes to rest on the terrain and static objects, then becomes a normal object again. Runs at the end of the frame.
+-- @function [parent=#world] physicsSetDynamic
+-- @param openmw.core#GameObject object
+-- @param openmw.util#Vector3 velocity Initial velocity in game units per second; nil stops the object where it is.
+-- @usage world.physicsSetDynamic(obj, util.vector3(0, 0, 300))
+
+---
+-- NerevarMoon engine only: true when the actor's body is a Jolt ragdoll (falling or frozen after death).
+-- @function [parent=#world] isRagdoll
+-- @param openmw.core#GameObject actor
+-- @return #boolean
+
+---
+-- NerevarMoon engine only: pushes a dead actor's ragdoll, or a knocked down actor's while it falls. A frozen
+-- corpse falls again from its pose; a knocked out actor resting on the ground is not pushed.
+-- Runs at the end of the frame; does nothing to an actor without a ragdoll.
+-- @function [parent=#world] physicsImpulse
+-- @param openmw.core#GameObject actor
+-- @param openmw.util#Vector3 impulse Velocity added, in game units per second.
+-- @param #string bone (optional) Bone name, e.g. 'Bip01 Head'; the chest when nil or unknown.
+-- @return #boolean false for a living actor that is not down as a ragdoll or a non-actor, true when the push is
+-- queued.
+-- @usage world.physicsImpulse(corpse, util.vector3(0, 400, 150))
+
+---
 -- Create a new instance of the given record.
 -- After creation the object is in the disabled state. Use :teleport to place to the world or :moveInto to put it into a container or an inventory.
 -- Note that dynamically created creatures, NPCs, and container inventories will not respawn.
