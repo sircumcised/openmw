@@ -39,15 +39,15 @@ namespace SDLUtil
             EXPECT_EQ(displayScale(nullptr), 1.f);
         }
 
-        /// A window shows nothing while any of the three flags stands, whatever else is set.
-        TEST(SDLUtilVideoWrapperTest, aWindowHiddenMinimizedOrOccludedShowsNothing)
+        /// A window shows nothing while hidden or minimized, whatever else is set; NerevarMoon: an occluded window keeps running.
+        TEST(SDLUtilVideoWrapperTest, aWindowHiddenOrMinimizedShowsNothingOccludedShows)
         {
             EXPECT_TRUE(isWindowShown(0));
             EXPECT_TRUE(isWindowShown(SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_RESIZABLE));
             EXPECT_FALSE(isWindowShown(SDL_WINDOW_HIDDEN));
             EXPECT_FALSE(isWindowShown(SDL_WINDOW_MINIMIZED));
-            EXPECT_FALSE(isWindowShown(SDL_WINDOW_OCCLUDED));
-            EXPECT_FALSE(isWindowShown(SDL_WINDOW_OCCLUDED | SDL_WINDOW_INPUT_FOCUS));
+            EXPECT_TRUE(isWindowShown(SDL_WINDOW_OCCLUDED));
+            EXPECT_TRUE(isWindowShown(SDL_WINDOW_OCCLUDED | SDL_WINDOW_INPUT_FOCUS));
             EXPECT_FALSE(isWindowShown(SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED));
         }
     }

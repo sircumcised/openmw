@@ -252,8 +252,9 @@
 -- if head then print(head:apply(util.vector3(0, 0, 0))) end
 
 ---
--- NerevarMoon: hide the player's head, hair and helmet parts from the main camera. They still cast shadows
--- and show in water reflections. Kept when equipment changes or the model is rebuilt; cleared when the player
+-- NerevarMoon: hide the player's head, hair and helmet parts from the main camera. Under the OpenGL renderer they
+-- still cast shadows and show in water reflections; under the ray tracer (openmw-rtx) the hidden parts leave the
+-- scene entirely, so they cast no shadow. Kept when equipment changes or the model is rebuilt; cleared when the player
 -- switches to first person view. A new player model (game load, new game, race, sex, head or hair change in
 -- character generation) starts with the head shown, so call it again then.
 -- Applied at the start of the next frame, like @{#animation.addVfx}.

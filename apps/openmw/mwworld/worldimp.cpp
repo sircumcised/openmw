@@ -1449,7 +1449,8 @@ namespace MWWorld
         // NerevarMoon: Jolt dynamic bodies move their objects; settled ones become normal objects again
         for (const MWPhysics::JoltWorld::Moved& moved : mPhysics->stepDynamics(duration))
         {
-            const Ptr ptr = moveObject(moved.mPtr, moved.mPosition);
+            // jumps=false: a stepped body keeps its history in the ray tracer (no per-frame reset)
+            const Ptr ptr = moveObject(moved.mPtr, cellForMove(moved.mPtr, moved.mPosition, false), moved.mPosition, true, false, false);
             rotateObject(ptr, Misc::toEulerAnglesZYX(moved.mRotation), MWBase::RotationFlag_none);
             if (moved.mSettled)
                 mPhysics->stopDynamic(ptr);
@@ -1466,7 +1467,7 @@ namespace MWWorld
                 MWRender::Animation* animation = ptr.isEmpty() ? nullptr : getAnimation(ptr);
                 if (animation == nullptr || !ptr.isInCell() || !ptr.getRefData().isEnabled())
                     continue;
-                ptr = moveObject(ptr, pose.mLowest);
+                ptr = moveObject(ptr, cellForMove(ptr, pose.mLowest, false), pose.mLowest, true, false, false);
                 // Moving may have put the actor out of the active cells: its animation is gone then
                 animation = getAnimation(ptr);
                 osg::Node* base = ptr.getRefData().getBaseNode();

@@ -1924,13 +1924,7 @@ namespace MWRender
     // NerevarMoon: read-only bone transform for Lua (animation.getBoneTransform)
     std::optional<osg::Matrixf> Animation::getBoneWorldTransform(std::string_view bone) const
     {
-        const osg::Node* node = getNode(bone);
-        if (!node)
-            return std::nullopt;
-        osg::NodePathList nodepaths = node->getParentalNodePaths();
-        if (nodepaths.empty())
-            return std::nullopt;
-        return osg::computeLocalToWorld(nodepaths[0]);
+        return getNodeWorldTransform(bone);
     }
 
     namespace
