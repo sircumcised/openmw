@@ -3,6 +3,7 @@
 #include <charconv>
 #include <vector>
 
+#include <osg/ComputeBoundsVisitor>
 #include <osg/Group>
 
 #include <MyGUI_TextIterator.h>

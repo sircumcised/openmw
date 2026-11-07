@@ -26,7 +26,6 @@
 #include <map>
 #include <mutex>
 
-#include <osg/ref_ptr>
 
 #include <components/debug/debuglog.hpp>
 #include <components/misc/strings/algorithm.hpp>
@@ -144,8 +143,8 @@ namespace MWPhysics
         std::map<Key, Ragdoll> mRagdolls;
         std::vector<RagdollPose> mPoses;
         std::uint64_t mRagdollCounter = 0;
-        // One converted shape per collision mesh; the ref_ptr keeps the key's BulletShape alive
-        std::map<const Resource::BulletShape*, std::pair<osg::ref_ptr<const Resource::BulletShape>, JPH::ShapeRefC>>
+        // One converted shape per collision mesh; the shared_ptr keeps the key's BulletShape alive
+        std::map<const Resource::BulletShape*, std::pair<std::shared_ptr<const Resource::BulletShape>, JPH::ShapeRefC>>
             mShapes;
         JoltShapeStats mShapeStats;
         float mTimeAccum = 0.f;
@@ -176,14 +175,14 @@ namespace MWPhysics
             bodies().DestroyBody(id);
         }
 
-        JPH::ShapeRefC shapeFor(const Resource::BulletShape& source)
+        JPH::ShapeRefC shapeFor(const std::shared_ptr<const Resource::BulletShape>& source)
         {
-            if (auto found = mShapes.find(&source); found != mShapes.end())
+            if (auto found = mShapes.find(source.get()); found != mShapes.end())
                 return found->second.second;
             JPH::ShapeRefC shape;
-            if (source.mCollisionShape)
-                shape = convertBulletShape(*source.mCollisionShape, mShapeStats);
-            mShapes.emplace(&source, std::make_pair(osg::ref_ptr<const Resource::BulletShape>(&source), shape));
+            if (source->mCollisionShape)
+                shape = convertBulletShape(*source->mCollisionShape, mShapeStats);
+            mShapes.emplace(source.get(), std::make_pair(source, shape));
             return shape;
         }
 
@@ -359,7 +358,7 @@ namespace MWPhysics
         mImpl->mTerrain.erase(found);
     }
 
-    void JoltWorld::addStatic(const MWWorld::Ptr& ptr, const Resource::BulletShape& source,
+    void JoltWorld::addStatic(const MWWorld::Ptr& ptr, const std::shared_ptr<const Resource::BulletShape>& source,
         const osg::Vec3f& position, const osg::Quat& rotation, float scale)
     {
         mImpl->removeStatic(ptr.mRef);

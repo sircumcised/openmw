@@ -51,8 +51,8 @@ namespace MWPhysics
         void addHeightField(const float* heights, int x, int y, int size, int verts);
         void removeHeightField(int x, int y);
 
-        void addStatic(const MWWorld::Ptr& ptr, const Resource::BulletShape& source, const osg::Vec3f& position,
-            const osg::Quat& rotation, float scale);
+        void addStatic(const MWWorld::Ptr& ptr, const std::shared_ptr<const Resource::BulletShape>& source,
+            const osg::Vec3f& position, const osg::Quat& rotation, float scale);
         void setStaticPosition(const MWWorld::Ptr& ptr, const osg::Vec3f& position);
         void setStaticRotation(const MWWorld::Ptr& ptr, const osg::Quat& rotation);
         void setStaticScale(const MWWorld::Ptr& ptr, float scale);

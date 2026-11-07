@@ -462,7 +462,7 @@ namespace MWPhysics
         const Object* obj = getObject(ptr);
         if (!mJolt || !obj || obj->isAnimated() || !obj->getShapeInstance()->getSource())
             return;
-        mJolt->addStatic(ptr, *obj->getShapeInstance()->getSource(), ptr.getRefData().getPosition().asVec3(),
+        mJolt->addStatic(ptr, obj->getShapeInstance()->getSource(), ptr.getRefData().getPosition().asVec3(),
             rotation, ptr.getCellRef().getScale());
     }
 
