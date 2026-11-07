@@ -1,0 +1,82 @@
+# NerevarMoon engine on openmw-rtx: builds the Windows package on every push to nm-rtx (see NEREVARMOON.md)
+# and publishes it as the release "nerevarmoon-rtx-build-N", like rtx-release.yml does for a tag.
+name: NerevarMoon RTX Engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [nm-rtx]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/openmw-deps
+        with:
+          cache: true
+          ccache-key: nerevarmoon-rtx-windows
+          ccache-size: 3000M
+
+      - name: Package
+        run: python omw archive nm-rtx
+
+      - name: Archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openmw-nm-rtx-windows
+          path: dist
+          if-no-files-found: error
+          compression-level: 6
+
+      - name: Logs
+        if: failure()
+        uses: ./.github/actions/logs
+        with:
+          name: logs-nerevarmoon-rtx-${{ github.sha }}
+          build: build-package
+
+  release:
+    needs: windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: nerevarmoon-rtx-build-${{ github.run_number }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: openmw-nm-rtx-windows
+          path: dist
+
+      - name: Zip the Windows folder
+        run: |
+          cd dist
+          ls -l
+          zip -qr "../OpenMW-NerevarMoon-RTX-${RELEASE_TAG}-win64.zip" .
+          cd ..
+          ls -l *.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: OpenMW NerevarMoon RTX ${{ env.RELEASE_TAG }}
+          body: openmw-rtx 0.4.5 (OpenMW 0.53, Vulkan ray tracer) with the NerevarMoon engine additions (NEREVARMOON.md in the repository). Unzip anywhere and run openmw.exe from that folder.
+          files: OpenMW-NerevarMoon-RTX-${{ env.RELEASE_TAG }}-win64.zip
