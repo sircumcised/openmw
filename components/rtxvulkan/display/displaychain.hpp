@@ -16,6 +16,7 @@
 #include "bloompass.hpp"
 #include "exposurepass.hpp"
 #include "linepass.hpp"
+#include "rainlenspass.hpp"
 #include "sunglarepass.hpp"
 #include "tonepass.hpp"
 
@@ -70,6 +71,9 @@ namespace Rtx
         GrowableBuffer& mDebugVertices;
 
         GpuTimer& mTimer;
+
+        /// NerevarMoon: the rain streaks on the lens, after the curve (`RainLensPass`).
+        RainLens mRain{};
     };
 
     /// What one picture asks of the display chain: a frame, or a picture inside the interface,
@@ -127,12 +131,16 @@ namespace Rtx
         void resize(std::uint32_t width, std::uint32_t height);
 
         /// Lets what `resize` built go, until the next one.
-        void release() { mBloom.release(); }
+        void release()
+        {
+            mBloom.release();
+            mRainLens.release();
+        }
 
         /// What `resize` to this extent builds, in the device's memory.
         static VkDeviceSize bytesAt(const Device& device, std::uint32_t width, std::uint32_t height)
         {
-            return BloomPass::bytesAt(device, width, height);
+            return BloomPass::bytesAt(device, width, height) + RainLensPass::bytesAt(device, width, height);
         }
 
         /// The glare fader's query starts the frame at nothing, ahead of the trace that counts.
@@ -166,6 +174,7 @@ namespace Rtx
         /// lays the glare fader over the picture by.
         SunGlarePass mSunGlare;
         TonePass mTone;
+        RainLensPass mRainLens;
 
         /// The debug modes' lines and triangles, over the picture and under the interface.
         LinePass mLines;

@@ -42,6 +42,7 @@ set(RTX_SHADERS
     shaders/display/histogram.comp
     shaders/display/line.frag
     shaders/display/line.vert
+    shaders/display/rainlens.comp
     shaders/display/sunglare.comp
     shaders/display/tone.comp
     shaders/gui/gui.frag
@@ -354,6 +355,8 @@ set(RTX_VULKAN_FILES
     display/exposurepass.hpp
     display/linepass.cpp
     display/linepass.hpp
+    display/rainlenspass.cpp
+    display/rainlenspass.hpp
     display/sunglarepass.cpp
     display/sunglarepass.hpp
     display/tonepass.cpp
@@ -440,6 +443,7 @@ set(RTX_VULKAN_FILES
     shaders/shared/pane.h
     shaders/shared/pinning.h
     shaders/shared/probe.h
+    shaders/shared/rainlens.h
     shaders/shared/rgtc.h
     shaders/shared/ripple.h
     shaders/shared/sets.h

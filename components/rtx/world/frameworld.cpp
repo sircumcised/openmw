@@ -154,7 +154,8 @@ namespace Rtx
         }
 
         constants.mFogColour = air.mColour;
-        constants.mFogExtinction = air.mExtinction;
+        // NerevarMoon: the rain's haze thickens the air the weather settled, up to two and a half times.
+        constants.mFogExtinction = air.mExtinction * (1.0f + 1.5f * reading.mRainHaze);
         constants.mFogUniform = air.mUniform;
         constants.mFogLift = air.mLift;
 
@@ -181,5 +182,7 @@ namespace Rtx
         options.mExposureBias = light.mExposureBias;
         options.mGlare = reading.mSunGlare;
         options.mNightEye = reading.mNightEye;
+        options.mRainStreak = reading.mRainStreak;
+        options.mRainMotion = reading.mRainMotion;
     }
 }

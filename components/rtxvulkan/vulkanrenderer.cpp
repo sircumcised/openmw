@@ -836,6 +836,11 @@ namespace Rtx
                     .mDebug = options.mDebug,
                     .mDebugVertices = frame.mDebugVertices,
                     .mTimer = timer,
+                    .mRain = RainLens{
+                        .mStreak = described.mRainStreak,
+                        .mMotion = described.mRainMotion,
+                        .mSeconds = described.mWaterSeconds,
+                    },
                 },
             });
 

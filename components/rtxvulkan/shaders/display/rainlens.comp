@@ -1,0 +1,73 @@
+#version 460
+
+#extension GL_GOOGLE_include_directive : require
+
+// NerevarMoon: rain streaks on the lens, over the toned picture.
+//
+// **The 0.51 line's `nm_rain.omwfx` term for term**, in its texture coordinates: those have y = 0 at
+// the bottom of the screen and an image row y = 0 at the top, so the pixel is flipped into them and
+// the displaced read flipped back. 400 bands across the streak direction, a taper across each band,
+// a dash scrolling 1.5 times a second along it, the picture read up to 8 pixels along the streak and
+// lifted by 0.08 at full strength.
+
+#include "shared/rainlens.h"
+#include "shared/sets.h"
+#include "shared/tone.h"
+
+#include "lib/census.glsl"
+#include "lib/pixels.glsl"
+
+layout(local_size_x = RAIN_LENS_WORKGROUP, local_size_y = RAIN_LENS_WORKGROUP) in;
+
+/// The toned picture, sampled bilinearly and clamped at its edges.
+layout(set = SET_PASS, binding = RAIN_LENS_BIND_SOURCE) uniform sampler2D source;
+
+/// The picture the window shows, `TONE_TARGET_FORMAT`.
+layout(set = SET_PASS, binding = RAIN_LENS_BIND_TARGET, TONE_TARGET_FORMAT) uniform writeonly image2D target;
+
+layout(push_constant, scalar) uniform Push
+{
+    RainLensConstants frame;
+};
+
+float rainHash(float n)
+{
+    return fract(sin(n) * 43758.5453);
+}
+
+void main()
+{
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    if (outsideOf(pixel, frame.mSize))
+        return;
+
+    const vec2 resolution = vec2(frame.mSize);
+    const vec2 motion = frame.mMotion;
+    const float streak = frame.mStreak;
+
+    // The omwfx's texture coordinate: y up.
+    const vec2 uv = vec2((float(pixel.x) + 0.5) / resolution.x, 1.0 - (float(pixel.y) + 0.5) / resolution.y);
+
+    // Downward on the screen is -y here. dirPx is the streak direction in screen pixels.
+    vec2 dirPx = normalize(vec2(motion.x * 0.6, -1.0 - 0.3 * motion.y));
+    // Walking forward spreads the streaks slightly outward from the screen centre.
+    dirPx = normalize(dirPx + (uv - 0.5) * 0.3 * max(motion.y, 0.0));
+    // uv stretches x by the aspect ratio, so x is scaled back for an on-screen angle.
+    const vec2 dir = normalize(vec2(dirPx.x * resolution.y / resolution.x, dirPx.y));
+    const vec2 perp = vec2(-dir.y, dir.x);
+
+    const float t = dot(uv, perp) * 400.0;
+    const float id = floor(t);
+    float band = smoothstep(0.85, 1.0, rainHash(id));
+    // The taper across the band: one at its centre, nought at its edges.
+    band *= 1.0 - abs(fract(t) * 2.0 - 1.0);
+    const float s = fract(dot(uv, dir) * 6.0 - frame.mSeconds * 1.5 + rainHash(id + 17.0));
+    band *= smoothstep(0.0, 0.1, s) * (1.0 - smoothstep(0.1, 0.6, s));
+
+    // 8 pixels at full strength; dirPx is in pixels, so divided by the resolution once.
+    const vec2 offset = uv + dirPx * band * streak * 8.0 / resolution;
+    vec4 colour = textureLod(source, vec2(offset.x, 1.0 - offset.y), 0.0);
+    colour.rgb += 0.08 * band * streak;
+
+    RTX_STORE_COUNTED(target, ivec2(pixel), colour)
+}

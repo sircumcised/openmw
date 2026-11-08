@@ -388,6 +388,10 @@ namespace MWWorld
 
         const MWRender::SkyState& getSkyState() const override;
 
+        void setWeatherSoundGain(float gain) override;
+
+        void setWeatherRainLook(float streak, float haze, float mx, float my) override;
+
         unsigned int getNightDayMode() const override;
 
         int getMasserPhase() const override;

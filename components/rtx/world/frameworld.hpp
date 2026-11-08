@@ -68,6 +68,13 @@ namespace Rtx
         /// occluder box and not a number decided here.
         float mShelterHeight = 0.0f;
 
+        /// NerevarMoon: the rain look a Lua script set (`core.weather.setRainLook`), nought indoors.
+        /// The streak strength and camera-space motion go to the display chain's lens; the haze
+        /// thickens the air (`describeWorld`).
+        float mRainStreak = 0.0f;
+        float mRainHaze = 0.0f;
+        osg::Vec2f mRainMotion{};
+
         /// The sun glare fader as the game states it this frame, which the frame's options carry
         /// to the display chain.
         SunGlare mSunGlare;
@@ -102,6 +109,11 @@ namespace Rtx
         /// whole, so a step boundary is read off the clock and not off its split rebuilt. Filled
         /// where the world describes the frame (`describeWorld`).
         double mWaterSeconds = 0.0;
+
+        /// NerevarMoon: the rain streaks on the lens and the camera-space motion that bends them,
+        /// `WorldReading::mRainStreak` and `mRainMotion`, which the display chain draws after the curve.
+        float mRainStreak = 0.0f;
+        osg::Vec2f mRainMotion{};
     };
 
     /// How far the air has been carried downwind since a run began, in world units: the integral

@@ -20,6 +20,7 @@
 #include "../mwworld/weather.hpp"
 
 #include "context.hpp"
+#include "luamanagerimp.hpp"
 #include "object.hpp"
 #include "recordstore.hpp"
 #include "types/usertypeutil.hpp"
@@ -494,6 +495,16 @@ namespace MWLua
         api["getNext"] = overloadForActiveCell(
             []() -> const MWWorld::Weather* { return MWBase::Environment::get().getWorld()->getNextWeather(); });
         api["getTransition"] = overloadWeatherGetter(&MWBase::World::getWeatherTransition);
+        api["setSoundGain"] = [context](const Misc::FiniteFloat gain) {
+            context.mLuaManager->addAction(
+                [gain] { MWBase::Environment::get().getWorld()->setWeatherSoundGain(gain); });
+        };
+        api["setRainLook"] = [context](const Misc::FiniteFloat streak, const Misc::FiniteFloat haze,
+                                 const Misc::FiniteFloat mx, const Misc::FiniteFloat my) {
+            context.mLuaManager->addAction([streak, haze, mx, my] {
+                MWBase::Environment::get().getWorld()->setWeatherRainLook(streak, haze, mx, my);
+            });
+        };
         api["getCurrentSunLightDirection"] = overloadForActiveCell(
             []() -> std::optional<osg::Vec4f> {
                 osg::Vec4f sunPos = MWBase::Environment::get().getWorld()->getSunLightPosition();
