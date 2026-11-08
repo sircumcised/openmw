@@ -90,7 +90,23 @@ jobs:
 
     - uses: ilammy/msvc-dev-cmd@v1
 
-    - uses: seanmiddleditch/gha-setup-ninja@master
+    # NerevarMoon: gha-setup-ninja failed its download on builds 52 and 53; fetch ninja ourselves with retries
+    - name: Install Ninja
+      shell: pwsh
+      run: |
+        $dir = "${{ github.workspace }}/deps/ninja"
+        New-Item -ItemType Directory -Force $dir | Out-Null
+        $ok = $false
+        for ($i = 0; $i -lt 8 -and -not $ok; $i++) {
+          try {
+            Invoke-WebRequest -Uri https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip -OutFile "$dir/ninja.zip"
+            $ok = $true
+          } catch { Write-Host "ninja download failed ($i): $_"; Start-Sleep 60 }
+        }
+        if (-not $ok) { exit 1 }
+        Expand-Archive "$dir/ninja.zip" -DestinationPath $dir -Force
+        "$dir" | Out-File -FilePath $env:GITHUB_PATH -Append
+        & "$dir/ninja.exe" --version
 
     - name: Configure OpenMW
       run: >
