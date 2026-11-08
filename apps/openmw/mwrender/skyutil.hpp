@@ -4,6 +4,7 @@
 #include <osg/Matrixf>
 #include <osg/Texture2D>
 #include <osg/Transform>
+#include <osg/Vec2f>
 #include <osg/Vec4f>
 
 #include <osgParticle/ConstantRateCounter>
@@ -66,6 +67,11 @@ namespace MWRender
         float mNightFade{}; // fading factor for night skybox
         float mAmbientSoundVolume{};
         float mPrecipitationAlpha{};
+
+        // NerevarMoon: the rain look Lua set (`core.weather.setRainLook`), read by the ray tracer
+        float mRainStreak{};
+        float mRainHaze{};
+        osg::Vec2f mRainMotion;
 
         bool mNight{}; // use night skybox
 

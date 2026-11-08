@@ -242,6 +242,12 @@ namespace MWRender
             .mShelterHeight
             = falling.isOccluded() ? falling.getOcclusionRange().z() + Constants::CellSizeInUnits : 0.0f,
 
+            // NerevarMoon: what the Lua rain script set, nought indoors, where the weather stops
+            // updating and its result holds the last exterior's.
+            .mRainStreak = world.isOutdoors() ? weather.mRainStreak : 0.0f,
+            .mRainHaze = world.isOutdoors() ? weather.mRainHaze : 0.0f,
+            .mRainMotion = weather.mRainMotion,
+
             // The fader's strength as `SunGlareCallback` multiplies it up: `_Max` by the
             // time-of-day fade by the glare view `SkyManager::setWeather` hands the sun, which is
             // the weather's `Glare_View` by the disc's own sunrise and sunset alpha. The glare node

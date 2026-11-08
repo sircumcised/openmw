@@ -835,6 +835,9 @@ namespace MWWorld
 
         mSky.mWeather = calculateWeatherResult(time.getHour(), duration, paused);
         mSky.keepNames();
+        mSky.mWeather.mRainStreak = mRainStreak;
+        mSky.mWeather.mRainHaze = mRainHaze;
+        mSky.mWeather.mRainMotion = mRainMotion;
         if (mSky.mWeather.mWeather != nullptr)
         {
             mShownWeather = *mSky.mWeather.mWeather;

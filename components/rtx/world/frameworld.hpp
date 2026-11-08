@@ -68,6 +68,13 @@ namespace Rtx
         /// occluder box and not a number decided here.
         float mShelterHeight = 0.0f;
 
+        /// NerevarMoon: the rain look a Lua script set (`core.weather.setRainLook`), nought indoors.
+        /// The streak strength and camera-space motion go to the display chain's lens; the haze
+        /// thickens the air (`describeWorld`).
+        float mRainStreak = 0.0f;
+        float mRainHaze = 0.0f;
+        osg::Vec2f mRainMotion{};
+
         /// The sun glare fader as the game states it this frame, which the frame's options carry
         /// to the display chain.
         SunGlare mSunGlare;

@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include <osg/Vec2f>
 #include <osg/Vec4f>
 
 #include <components/esm/refid.hpp>
@@ -362,6 +363,15 @@ namespace MWWorld
         // NerevarMoon: Lua multiplier on the weather ambient and rain loops, clamped to [0, 1]
         void setSoundGain(float g) { mSoundGain = std::clamp(g, 0.f, 1.f); }
 
+        // NerevarMoon: the rain look from Lua (streak and haze 0..1, camera-space motion x right y forward),
+        // copied into the weather result at each exterior update for the ray tracer
+        void setRainLook(float streak, float haze, float mx, float my)
+        {
+            mRainStreak = std::clamp(streak, 0.f, 1.f);
+            mRainHaze = std::clamp(haze, 0.f, 1.f);
+            mRainMotion = osg::Vec2f(std::clamp(mx, -1.f, 1.f), std::clamp(my, -1.f, 1.f));
+        }
+
         bool useTorches(float hour) const;
 
         float getSunPercentage(float hour) const;
@@ -438,6 +448,9 @@ namespace MWWorld
         bool mHeld = false;
         std::map<ESM::RefId, RegionWeather> mRegions;
         float mSoundGain = 1.f;
+        float mRainStreak = 0.f;
+        float mRainHaze = 0.f;
+        osg::Vec2f mRainMotion;
 
         MWBase::Sound* mAmbientSound{ nullptr };
         ESM::RefId mPlayingAmbientSoundID;

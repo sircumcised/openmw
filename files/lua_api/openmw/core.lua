@@ -1490,6 +1490,14 @@
 -- @param #number gain 0..1 multiplier on the weather ambient and rain loops (NerevarMoon fork)
 
 ---
+-- Set the rain look the ray tracer draws: streaks on the lens and haze in the air (NerevarMoon fork, RTX build only)
+-- @function [parent=#Weather] setRainLook
+-- @param #number streak 0..1 strength of the rain streaks on the lens
+-- @param #number haze 0..1 extra fog from the rain, scales the air's extinction by 1 + 1.5 * haze
+-- @param #number mx camera-space motion, x right, normalized or 0
+-- @param #number my camera-space motion, y forward, normalized or 0
+
+---
 -- Change the weather
 -- @function [parent=#Weather] changeWeather
 -- @param #string regionId

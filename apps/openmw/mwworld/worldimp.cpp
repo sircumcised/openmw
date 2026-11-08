@@ -2447,6 +2447,11 @@ namespace MWWorld
         mWeatherManager->setSoundGain(gain);
     }
 
+    void World::setWeatherRainLook(float streak, float haze, float mx, float my)
+    {
+        mWeatherManager->setRainLook(streak, haze, mx, my);
+    }
+
     unsigned int World::getNightDayMode() const
     {
         return mWeatherManager->getNightDayMode();
