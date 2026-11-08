@@ -1,6 +1,7 @@
 #include "worldimp.hpp"
 
 #include <charconv>
+#include <chrono>
 #include <vector>
 
 #include <osg/ComputeBoundsVisitor>
@@ -12,6 +13,7 @@
 #include <LinearMath/btAabbUtil2.h>
 
 #include <components/debug/debuglog.hpp>
+#include <components/lua/luatiming.hpp>
 
 #include <components/esm3/cellref.hpp>
 #include <components/esm3/esmreader.hpp>
@@ -1413,7 +1415,24 @@ namespace MWWorld
         mPhysics->moveActors();
 
         // NerevarMoon: Jolt dynamic bodies move their objects; settled ones become normal objects again
-        for (const MWPhysics::JoltWorld::Moved& moved : mPhysics->stepDynamics(duration))
+        // The step time and body count go to the NMLUA log ([Lua] lua timing log = true).
+        const bool timeJolt = LuaUtil::LuaTiming::sEnabled;
+        const auto joltStart = timeJolt ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+        const auto movedBodies = mPhysics->stepDynamics(duration);
+        if (timeJolt)
+        {
+            LuaUtil::LuaTiming::add(
+                -3, "step", std::chrono::duration<double>(std::chrono::steady_clock::now() - joltStart).count());
+            static unsigned sJoltLogCalls = 0;
+            if (++sJoltLogCalls >= 600)
+            {
+                sJoltLogCalls = 0;
+                const MWPhysics::JoltWorld* jolt = mPhysics->getJolt();
+                const MWPhysics::JoltWorld::BodyCount c = jolt ? jolt->bodyCount() : MWPhysics::JoltWorld::BodyCount{ 0, 0 };
+                Log(Debug::Info) << "NMJOLT|active=" << c.mActive << "|total=" << c.mTotal;
+            }
+        }
+        for (const MWPhysics::JoltWorld::Moved& moved : movedBodies)
         {
             const Ptr ptr = moveObject(moved.mPtr, moved.mPosition);
             rotateObject(ptr, Misc::toEulerAnglesZYX(moved.mRotation), MWBase::RotationFlag_none);

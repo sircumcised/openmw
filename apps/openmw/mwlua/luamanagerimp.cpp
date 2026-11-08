@@ -238,6 +238,8 @@ namespace MWLua
             {
                 mTimingFrames = 0;
                 const auto scriptName = [this](int i) -> std::string {
+                    if (i == -3)
+                        return "[jolt]";
                     if (i < 0 || static_cast<std::size_t>(i) >= mConfiguration.size())
                         return "[gc]";
                     return std::string(mConfiguration[i].mScriptPath.value());

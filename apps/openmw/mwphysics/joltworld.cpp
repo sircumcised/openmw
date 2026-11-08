@@ -567,6 +567,13 @@ namespace MWPhysics
         mImpl->freezeRagdoll(ptr.mRef);
     }
 
+    JoltWorld::BodyCount JoltWorld::bodyCount() const
+    {
+        if (!mImpl)
+            return { 0, 0 };
+        return { mImpl->mSystem.GetNumActiveBodies(JPH::EBodyType::RigidBody), mImpl->mSystem.GetNumBodies() };
+    }
+
     std::vector<JoltWorld::RagdollPose> JoltWorld::takeRagdollPoses()
     {
         return std::exchange(mImpl->mPoses, {});

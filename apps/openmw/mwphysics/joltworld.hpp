@@ -116,6 +116,14 @@ namespace MWPhysics
         /// Fixed 1/60 s steps, at most 4 per call. Returns the dynamic bodies that moved, with their new transforms.
         std::vector<Moved> step(float dt);
 
+        struct BodyCount
+        {
+            unsigned mActive;
+            unsigned mTotal;
+        };
+        /// Rigid bodies awake and in total (static ones included); {0, 0} without a Jolt system.
+        BodyCount bodyCount() const;
+
     private:
         struct Impl;
         std::unique_ptr<Impl> mImpl;
