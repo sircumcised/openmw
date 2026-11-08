@@ -113,9 +113,10 @@ namespace MWRender
     }
 
     void Camera::setStaticHeadTracking(
-        const std::optional<osg::Vec3f>& offset, bool followRotation, float stabilization)
+        const std::optional<osg::Vec3f>& offset, bool followRotation, float stabilization, float filterTime)
     {
         mHeadStabilization = std::clamp(stabilization, 0.f, 1.f);
+        mHeadFilterTime = std::clamp(filterTime, 0.02f, 1.f);
         if (!offset)
             mHeadOffsetFiltered.reset();
         followRotation = followRotation && offset.has_value();
@@ -202,7 +203,7 @@ namespace MWRender
         {
             updateFocalPointOffset(duration);
             mHeadReturn = std::max(mHeadReturn - duration, 0.f);
-            // low pass of the head relative to the body, 0.1 s; a jump over 50 units (teleport, fall) snaps
+            // low pass of the head relative to the body, mHeadFilterTime s; a jump over 50 units (teleport, fall) snaps
             const std::optional<osg::Vec3d> bone = calculateHeadBonePosition();
             const std::optional<osg::Vec3d> body = trackedActorPosition();
             if (mStaticHeadOffset && mHeadStabilization > 0.f && bone && body)
@@ -211,7 +212,7 @@ namespace MWRender
                 if (!mHeadOffsetFiltered || (raw - *mHeadOffsetFiltered).length() > 50.0)
                     mHeadOffsetFiltered = raw;
                 else
-                    *mHeadOffsetFiltered += (raw - *mHeadOffsetFiltered) * (1.0 - std::exp(-duration / 0.1));
+                    *mHeadOffsetFiltered += (raw - *mHeadOffsetFiltered) * (1.0 - std::exp(-duration / mHeadFilterTime));
             }
             else
                 mHeadOffsetFiltered.reset();

@@ -100,9 +100,10 @@ namespace MWRender
         // plus an offset (x right, y forward along the camera yaw, z up); nullopt turns it off. `followRotation`: the
         // view also turns with the head bone (ragdoll), from the view it had when this started; back to yaw/pitch
         // over 0.3 s when it ends
-        // `stabilization` 0..1: share of the head's sway relative to the body that is filtered out (0.1 s low pass)
-        void setStaticHeadTracking(
-            const std::optional<osg::Vec3f>& offset, bool followRotation = false, float stabilization = 0.f);
+        // `stabilization` 0..1: share of the head's sway relative to the body that is filtered out by a low pass of
+        // `filterTime` seconds (0.02..1, default 0.1)
+        void setStaticHeadTracking(const std::optional<osg::Vec3f>& offset, bool followRotation = false,
+            float stabilization = 0.f, float filterTime = 0.1f);
         bool hasStaticHeadTracking() const { return mStaticHeadOffset.has_value(); }
 
         bool isVanityOrPreviewModeEnabled() const { return mMode == Mode::Vanity || mMode == Mode::Preview; }
@@ -162,6 +163,7 @@ namespace MWRender
         float mHeadReturn = 0.f; // seconds of the way back to yaw/pitch left
         std::optional<osg::Quat> calculateHeadRotation() const;
         float mHeadStabilization = 0.f;
+        float mHeadFilterTime = 0.1f; // seconds, low pass of the head relative to the body
         std::optional<osg::Vec3d> mHeadOffsetFiltered; // head - tracked actor position, low passed
         std::optional<osg::Vec3d> calculateHeadBonePosition() const;
         std::optional<osg::Vec3d> trackedActorPosition() const;
