@@ -777,6 +777,10 @@ namespace Rtx
             ASSERT_TRUE(fill.has_value() && street.has_value() && torch.has_value());
             EXPECT_EQ(fill->mIntensity, street->mIntensity);
             EXPECT_FLOAT_EQ(fill->mReach, 3000.0f * 2.0f + 128.0f);
+            // The flame is capped with the intensity: a 187-unit ball of a 3000 record made every
+            // shadow ray a wide-cone draw, which is noise the denoiser then has to chase.
+            EXPECT_FLOAT_EQ(fill->mSourceRadius, street->mSourceRadius);
+            EXPECT_FLOAT_EQ(street->mSourceRadius, 512.0f / 16.0f);
             EXPECT_FLOAT_EQ(torch->mIntensity.x(), 440.0f * 440.0f * 0.25f * Shaders::PI);
             EXPECT_LT(torch->mIntensity.x(), street->mIntensity.x());
         }

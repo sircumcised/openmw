@@ -209,8 +209,9 @@ namespace Rtx
             .mReach = radius * sReachScale + sReachBonus,
 
             // A sixteenth is an estimate, and the paragraph above argues it is a good one — a
-            // lamp that casts no penumbra at all is the worse answer.
-            .mSourceRadius = radius * sSourceFraction,
+            // lamp that casts no penumbra at all is the worse answer. NerevarMoon: capped with the
+            // intensity, because a 3000 record's 187-unit ball made every shadow ray a wide-cone draw.
+            .mSourceRadius = std::min(radius, sIntensityRadiusCap) * sSourceFraction,
 
             // **No clearance: a lamp's shadow ray runs to the flame.** A quarter of the radius was
             // kept clear once, so a ray would not end among a lantern's own cage, and it cost every
