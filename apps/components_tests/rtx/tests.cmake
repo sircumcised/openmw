@@ -76,6 +76,7 @@ set(RTX_TEST_FILES
     rtx/scene/compositequeue.cpp
     rtx/scene/instancerecord.cpp
     rtx/scene/lightgrid.cpp
+    rtx/scene/material.cpp
     rtx/scene/refusals.cpp
     rtx/scene/scenedesc.cpp
     rtx/scene/scenetextures.cpp

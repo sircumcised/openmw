@@ -560,6 +560,10 @@ namespace Rtx
                 += osg::Vec3f(overridden.x() * ambient.x(), overridden.y() * ambient.y(), overridden.z() * ambient.z());
         }
 
+        // NerevarMoon: a blended sheet (sparks, smoke, blood, dust) keeps its glow at the rasterizer's
+        // level; the tracer's gain stays on opaque glowing surfaces and on the glow maps (`sheetGlowShare`).
+        material.mEmissiveColour *= sheetGlowShare(material.mAlphaMode);
+
         material.mParallax = described->mNormalHeight && material.mNormal != sNoIndex && !material.isCutout();
 
         // Scaled about the middle of the texture, then offset, which is what `NifOsg` builds its

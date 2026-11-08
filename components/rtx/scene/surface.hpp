@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include <components/rtx/shaders/look.h>
 #include <components/rtx/shaders/scene.h>
 
 namespace Rtx
@@ -86,5 +87,16 @@ namespace Rtx
     inline bool additiveSurface(const AlphaMode mode, const BlendKind blend)
     {
         return mode == AlphaMode::Blend && blend != BlendKind::Over;
+    }
+
+    /// NerevarMoon: how much of `Shaders::EMISSIVE_INTENSITY` a material's own emissive colour keeps.
+    /// One for an opaque or cutout surface, so a glowing window or a lava flow keeps the tracer's
+    /// gain of eight; one eighth for a blend, so Morrowind's sparks, smoke, blood and dust, whose
+    /// `NiMaterialProperty` emissive of 0.5 to 1 was a mild self-light under the rasterizer, stop
+    /// becoming lamps (a burst lamp, for an additive one) under the tracer. Applied once, by the
+    /// resolver, so the shader's single gain stays.
+    constexpr float sheetGlowShare(const AlphaMode mode)
+    {
+        return mode == AlphaMode::Blend ? 1.0f / Shaders::EMISSIVE_INTENSITY : 1.0f;
     }
 }
