@@ -528,7 +528,8 @@ namespace MWPhysics
     bool JoltWorld::rollToBack(const MWWorld::Ptr& ptr)
     {
         auto found = mImpl->mRagdolls.find(ptr.mRef);
-        if (found == mImpl->mRagdolls.end() || mImpl->axisAndFacing(found->second).second.z() >= -0.3f)
+        // face down or on a side: the getup animation starts on the back, so a body on its side rolls too
+        if (found == mImpl->mRagdolls.end() || mImpl->axisAndFacing(found->second).second.z() >= 0.5f)
             return false;
         found->second.mRollLeft = sRollTime;
         found->second.mRagdoll->Activate();

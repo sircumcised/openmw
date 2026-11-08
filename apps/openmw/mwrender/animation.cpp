@@ -1943,6 +1943,11 @@ namespace MWRender
             if (!world)
                 continue;
             MWPhysics::RagdollBone bone{ found->second->getName(), {}, *world, *world };
+            // a bone inside a severed piece is hidden: its body joins the fall without collisions
+            for (Piece severed : mSevered)
+                for (std::string_view cut : pieceBones(severed))
+                    if (Misc::StringUtils::ciEqual(cut, name))
+                        bone.mGhost = true;
             // Nearest ancestor that is a ragdoll bone too
             for (const osg::Node* parent = found->second->getNumParents() ? found->second->getParent(0) : nullptr;
                  parent != nullptr && bone.mParent.empty();
@@ -1962,6 +1967,11 @@ namespace MWRender
         auto node = getNodeMap().find(bone);
         if (node == getNodeMap().end())
             return nullptr;
+        // a held stump (the cut bone of a severed piece) keeps its pose: the cap on it must not swing with the
+        // hidden limb's body when the amputee dies later
+        for (const auto& [held, callback] : mBoneHolds)
+            if (held.get() == node->second.get())
+                return nullptr;
         if (!mRagdoll)
         {
             // First ragdoll bone: every animation stops, all bones keep their last pose

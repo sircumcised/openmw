@@ -1031,8 +1031,11 @@ namespace MWWorld
         const bool isInterior = !cell.isExterior();
         InsertVisitor insertVisitor(cell, loadingListener);
         cell.forEach(insertVisitor);
-        insertVisitor.insert(
-            [&](const MWWorld::Ptr& ptr) { addObject(ptr, mWorld, mPagedRefs, *mPhysics, mRendering); });
+        insertVisitor.insert([&](const MWWorld::Ptr& ptr) {
+            addObject(ptr, mWorld, mPagedRefs, *mPhysics, mRendering);
+            if (ptr.getClass().isActor())
+                mWorld.actorAddedToScene(ptr); // NerevarMoon: saved cuts and corpse pose from the first frame
+        });
         insertVisitor.insert([&](const MWWorld::Ptr& ptr) {
             addObject(ptr, mWorld, *mPhysics, mLowestPoint, isInterior, mNavigator, navigatorUpdateGuard);
         });
@@ -1044,6 +1047,8 @@ namespace MWWorld
         try
         {
             addObject(ptr, mWorld, mPagedRefs, *mPhysics, mRendering);
+            if (ptr.getClass().isActor())
+                mWorld.actorAddedToScene(ptr); // NerevarMoon: saved cuts and corpse pose from the first frame
             addObject(ptr, mWorld, *mPhysics, mLowestPoint, isInterior, mNavigator);
             mWorld.scaleObject(ptr, ptr.getCellRef().getScale());
         }

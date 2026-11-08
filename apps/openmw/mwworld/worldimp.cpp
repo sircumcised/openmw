@@ -1864,25 +1864,41 @@ namespace MWWorld
         mGibApplyTimer = 0.f;
         // a reloaded actor gets its pieces cut again, a reloaded piece gets the actor's meshes again
         for (const ESM::GibState& gib : mGibs)
-        {
-            const std::optional<MWRender::Piece> piece = MWRender::parsePiece(gib.mPiece);
-            const Ptr actor = mWorldModel.getPtr(gib.mActor);
-            if (!piece || actor.isEmpty() || !actor.isInCell() || !actor.getClass().isActor())
-                continue;
-            MWRender::Animation* animation = getAnimation(actor);
-            if (animation == nullptr)
-                continue;
-            if (!animation->isSevered(*piece))
-                animation->sever(*piece, gib.mCrushed, false);
-            if (!gib.mObject.isSet())
-                continue;
-            const Ptr object = mWorldModel.getPtr(gib.mObject);
-            if (object.isEmpty() || !object.isInCell() || hasGibClone(object))
-                continue;
-            MWRender::Animation::SeverResult geometry;
-            if (animation->fillSeverGeometry(*piece, geometry))
-                attachGibClone(object, animation->clonePiece(*piece, gib.mCrushed), geometry);
-        }
+            applyGib(gib);
+    }
+
+    void World::applyGib(const ESM::GibState& gib)
+    {
+        const std::optional<MWRender::Piece> piece = MWRender::parsePiece(gib.mPiece);
+        const Ptr actor = mWorldModel.getPtr(gib.mActor);
+        if (!piece || actor.isEmpty() || !actor.isInCell() || !actor.getClass().isActor())
+            return;
+        MWRender::Animation* animation = getAnimation(actor);
+        if (animation == nullptr)
+            return;
+        if (!animation->isSevered(*piece))
+            animation->sever(*piece, gib.mCrushed, false);
+        if (!gib.mObject.isSet())
+            return;
+        const Ptr object = mWorldModel.getPtr(gib.mObject);
+        if (object.isEmpty() || !object.isInCell() || hasGibClone(object))
+            return;
+        MWRender::Animation::SeverResult geometry;
+        if (animation->fillSeverGeometry(*piece, geometry))
+            attachGibClone(object, animation->clonePiece(*piece, gib.mCrushed), geometry);
+    }
+
+    void World::actorAddedToScene(const Ptr& actor)
+    {
+        const ESM::RefNum refNum = actor.getCellRef().getRefNum();
+        if (!refNum.isSet() || getAnimation(actor) == nullptr)
+            return;
+        for (const ESM::GibState& gib : mGibs)
+            if (gib.mActor == refNum)
+                applyGib(gib);
+        if (auto saved = mRagdollStates.find(refNum); saved != mRagdollStates.end())
+            if (actor.getClass().getCreatureStats(actor).isDead())
+                applyRagdollState(actor, saved->second);
     }
 
     bool World::isKnockdownRagdoll(const Ptr& actor) const

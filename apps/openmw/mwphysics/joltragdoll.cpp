@@ -244,6 +244,9 @@ namespace MWPhysics
             part.mAngularDamping = 0.6f;
             part.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
             part.mMassPropertiesOverride.mMass = std::max(massKg * volume[i] / totalVolume, 0.5f);
+            // a severed bone keeps its joint but collides with nothing: a corpse must not rest on an invisible head
+            if ((*found[i])->mGhost)
+                part.mIsSensor = true;
 
             if (parent < 0)
                 continue;

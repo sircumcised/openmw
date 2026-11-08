@@ -142,6 +142,7 @@ namespace MWWorld
         std::vector<ESM::GibState> mGibs;
         float mGibApplyTimer = 0.f;
         void applyGibs(float duration);
+        void applyGib(const ESM::GibState& gib);
         void updateKnockdowns(float duration);
         void endKnockdownFall(const Ptr& actor, Knockdown& knockdown);
         void beginGetup(const Ptr& actor, Knockdown& knockdown);
@@ -429,6 +430,9 @@ namespace MWWorld
             bool silent) override;
         bool isSevered(const Ptr& actor, std::string_view piece) override;
         void setLowerBodyLocked(const Ptr& actor, bool locked) override;
+        /// NerevarMoon: called by Scene once an actor's rendering exists; its saved cuts (NMGB) and corpse pose
+        /// (NMRD) show from the first frame instead of the next 0.5 s pass.
+        void actorAddedToScene(const Ptr& actor);
 
         MWWorld::Ptr placeObject(
             const MWWorld::ConstPtr& ptr, MWWorld::CellStore* cell, const ESM::Position& pos) override;

@@ -32,6 +32,7 @@ namespace MWPhysics
         std::string mParent; // nearest ancestor that is itself a ragdoll bone; empty for the pelvis
         osg::Matrixf mWorld;
         osg::Matrixf mWorldPrev;
+        bool mGhost = false; // NerevarMoon dismemberment: severed (hidden) bone, jointed but touching nothing
     };
 
     class JoltWorld
@@ -99,8 +100,8 @@ namespace MWPhysics
             const osg::Vec3f& impulse, float massKg, RagdollMode mode = RagdollMode::Death);
         /// z of the direction the chest faces (from head, pelvis and upper arms); 0 without an active ragdoll.
         float chestUpZ(const MWWorld::Ptr& ptr) const;
-        /// Turns a face-down body (chestUpZ < -0.3) onto its back: at most 0.6 s, ends at chestUpZ > 0.3. False
-        /// without an active ragdoll or when the chest does not face down.
+        /// Turns a body that is not on its back (chestUpZ < 0.5: face down or on its side) onto its back: at most
+        /// 0.9 s, ends at chestUpZ > 0.8. False without an active ragdoll or when the body already lies on its back.
         bool rollToBack(const MWWorld::Ptr& ptr);
         /// Adds `impulse` (units/s) to the named bone's body (chest when empty or unknown). False when not falling.
         bool applyRagdollImpulse(const MWWorld::Ptr& ptr, const osg::Vec3f& impulse, std::string_view bone);
