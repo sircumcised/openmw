@@ -761,5 +761,24 @@ namespace Rtx
             glow.mLit = true;
             EXPECT_TRUE(isNothing(glow.makeLight())) << "the game's own light is the effect's";
         }
+
+        /// **A fill light's radius sets its reach and not its brightness past 512.** NerevarMoon:
+        /// Morrowind's content carries records of 768 to 4096 units (`red_3000`, `lava_light_4096`,
+        /// `blue water ref 768` beside every waterfall) that the rasterizer's falloff and clamp kept
+        /// to a tint; an intensity that grows with the square of such a radius floods the cell. The
+        /// lamp keeps its reach, so it still tints as far as the record says, at the strength of
+        /// the strongest lamp the content lights a room with (a 512 streetlight).
+        TEST(RtxLightBuilderTest, aFillLightKeepsItsReachAndIsNoBrighterThanAFiveHundredTwelve)
+        {
+            const osg::Vec3f white(1.0f, 1.0f, 1.0f);
+            const std::optional<Light> fill = makeLight(white, 3000.0f, osg::Vec3f()).value();
+            const std::optional<Light> street = makeLight(white, 512.0f, osg::Vec3f()).value();
+            const std::optional<Light> torch = makeLight(white, 440.0f, osg::Vec3f()).value();
+            ASSERT_TRUE(fill.has_value() && street.has_value() && torch.has_value());
+            EXPECT_EQ(fill->mIntensity, street->mIntensity);
+            EXPECT_FLOAT_EQ(fill->mReach, 3000.0f * 2.0f + 128.0f);
+            EXPECT_FLOAT_EQ(torch->mIntensity.x(), 440.0f * 440.0f * 0.25f * Shaders::PI);
+            EXPECT_LT(torch->mIntensity.x(), street->mIntensity.x());
+        }
     }
 }

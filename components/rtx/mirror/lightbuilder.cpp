@@ -40,6 +40,14 @@ namespace Rtx
         constexpr float sReachScale = 2.0f;
         constexpr float sReachBonus = 128.0f;
 
+        /// NerevarMoon: the radius a lamp's intensity stops growing at, in units. The content
+        /// carries fill records of 768 to 4096 (`red_3000`, `lava_light_4096`, `blue water ref 768`
+        /// beside every waterfall) that the rasterizer's falloff and clamp kept to a tint; an
+        /// intensity that grows with the square of such a radius floods the cell. 512 is the
+        /// strongest lamp the content lights a room with (a streetlight); the reach above still
+        /// follows the record, so a fill light tints as far as it says at a streetlight's strength.
+        constexpr float sIntensityRadiusCap = 512.0f;
+
         /// How much of a lamp's recorded radius is actually alight, which is what its shadows are
         /// soft by. The intensity already scales with the square of the recorded radius, the law
         /// for an emitter of fixed radiance whose area grows with its size, so reading that radius
@@ -197,7 +205,7 @@ namespace Rtx
 
         return finiteOnly(Light{
             .mPosition = position,
-            .mIntensity = colour * (radius * radius * sIntensity),
+            .mIntensity = colour * (std::min(radius, sIntensityRadiusCap) * std::min(radius, sIntensityRadiusCap) * sIntensity),
             .mReach = radius * sReachScale + sReachBonus,
 
             // A sixteenth is an estimate, and the paragraph above argues it is a good one — a
