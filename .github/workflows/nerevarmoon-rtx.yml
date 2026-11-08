@@ -5,7 +5,7 @@ name: NerevarMoon RTX Engine
 on:
   workflow_dispatch:
   push:
-    branches: [nm-rtx]
+    branches: [nm-rtx, nm-rtx-rain]
 
 permissions: {}
 
