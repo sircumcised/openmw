@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include <SDL_events.h>
 
@@ -12,6 +13,7 @@
 #include "../mwmechanics/attacktype.hpp"
 #include "../mwmechanics/damagesourcetype.hpp"
 #include "../mwrender/animationpriority.hpp"
+#include <components/esm/defs.hpp>
 #include <components/sdlutil/events.hpp>
 
 namespace MWWorld
@@ -33,6 +35,7 @@ namespace ESM
     struct LuaScripts;
     struct DialInfo;
     struct Dialogue;
+    struct ActiveEffect;
 }
 
 namespace LuaUtil
@@ -89,6 +92,11 @@ namespace MWBase
             const MWWorld::Ptr& ammo, int attackType, float attackStrength, float damage, bool isHealth,
             const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType, bool critical = false,
             bool blocked = false) // NerevarMoon: critical and blocked go to the Hit event and to NMHitResult
+            = 0;
+        // NerevarMoon: NMSpellHit, a spell reached an actor (also a dead one); to the target and to the caster
+        virtual void onSpellHit(const MWWorld::Ptr& caster, const MWWorld::Ptr& target, const ESM::RefId& spellId,
+            const std::vector<ESM::ActiveEffect>& effects, ESM::RangeType range, const osg::Vec3f& hitPosition,
+            bool exploded)
             = 0;
         virtual void exteriorCreated(MWWorld::CellStore& cell) = 0;
         virtual void actorDied(const MWWorld::Ptr& actor) = 0;

@@ -9,6 +9,7 @@
 #include <components/misc/strings/format.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/soundmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
@@ -234,6 +235,11 @@ namespace MWMechanics
                 playEffects(target, *magicEffect);
             }
         }
+
+        // NerevarMoon: NMSpellHit, also for dead targets (the ragdoll corpse takes the push)
+        if (targetIsActor)
+            MWBase::Environment::get().getLuaManager()->onSpellHit(
+                mCaster, target, mId, params.getEffects(), range, mHitPosition, exploded);
 
         if (!exploded)
             explodeSpell(effects, target, range);

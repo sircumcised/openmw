@@ -521,6 +521,7 @@ namespace MWLua
                 "HitAction");
         };
         actor["hitResult"] = true; // NerevarMoon marker: the NMHitResult event exists
+        actor["spellHit"] = true; // NerevarMoon marker: the NMSpellHit event exists
 
         // NerevarMoon: knockdown state and trigger
         actor["isKnockedDown"] = [](const Object& o) {

@@ -103,6 +103,9 @@ namespace MWLua
             const MWWorld::Ptr& ammo, int attackType, float attackStrength, float damage, bool isHealth,
             const osg::Vec3f& hitPos, bool successful, MWMechanics::DamageSourceType sourceType, bool critical = false,
             bool blocked = false) override;
+        void onSpellHit(const MWWorld::Ptr& caster, const MWWorld::Ptr& target, const ESM::RefId& spellId,
+            const std::vector<ESM::ActiveEffect>& effects, ESM::RangeType range, const osg::Vec3f& hitPosition,
+            bool exploded) override;
         void exteriorCreated(MWWorld::CellStore& cell) override
         {
             mEngineEvents.addToQueue(EngineEvents::OnNewExterior{ cell });

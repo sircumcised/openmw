@@ -12,8 +12,10 @@
 #include <components/debug/debuglog.hpp>
 
 #include <components/esm/luascripts.hpp>
+#include <components/esm3/activespells.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
+#include <components/esm3/loadmgef.hpp>
 
 #include <components/lua/luatiming.hpp>
 #include <components/settings/values.hpp>
@@ -657,6 +659,61 @@ namespace MWLua
             }
 
             sendLocalEvent(victim, "Hit", data);
+        });
+    }
+
+    void LuaManager::onSpellHit(const MWWorld::Ptr& caster, const MWWorld::Ptr& target, const ESM::RefId& spellId,
+        const std::vector<ESM::ActiveEffect>& effects, ESM::RangeType range, const osg::Vec3f& hitPosition,
+        bool exploded)
+    {
+        const auto& magicEffectStore = MWBase::Environment::get().getESMStore()->get<ESM::MagicEffect>();
+        mLua.protectedCall([&](LuaUtil::LuaView& view) {
+            sol::table result = view.newTable();
+            if (!caster.isEmpty())
+                result["caster"] = LObject(caster);
+            result["target"] = LObject(target);
+            result["spell"] = spellId.serializeText();
+            switch (range)
+            {
+                case ESM::RT_Self:
+                    result["range"] = "self";
+                    break;
+                case ESM::RT_Touch:
+                    result["range"] = "touch";
+                    break;
+                case ESM::RT_Target:
+                    result["range"] = "target";
+                    break;
+            }
+            sol::table effectList = view.newTable();
+            for (const ESM::ActiveEffect& effect : effects)
+            {
+                sol::table entry = view.newTable();
+                entry["id"] = effect.mEffectId.serializeText();
+                // the magnitude is rolled when the effect is applied (next frame): send the middle of the range
+                entry["magnitude"] = (effect.mMinMagnitude + effect.mMaxMagnitude) / 2.f;
+                const ESM::MagicEffect* rec = magicEffectStore.search(effect.mEffectId);
+                if (rec && (rec->mData.mFlags & ESM::MagicEffect::TargetAttribute))
+                    entry["attribute"] = effect.getSkillOrAttribute().serializeText();
+                if (rec && (rec->mData.mFlags & ESM::MagicEffect::TargetSkill))
+                    entry["skill"] = effect.getSkillOrAttribute().serializeText();
+                effectList.add(entry);
+            }
+            result["effects"] = effectList;
+            result["hitPosition"] = hitPosition;
+            osg::Vec3f direction(0, 0, 0);
+            if (!caster.isEmpty())
+            {
+                direction = target.getRefData().getPosition().asVec3() - caster.getRefData().getPosition().asVec3();
+                direction.z() = 0;
+                if (direction.normalize() == 0)
+                    direction = osg::Vec3f(0, 0, 0);
+            }
+            result["direction"] = direction;
+            result["exploded"] = exploded;
+            sendLocalEvent(target, "NMSpellHit", result);
+            if (!caster.isEmpty() && caster != target && caster.getRefData().getLuaScripts())
+                sendLocalEvent(caster, "NMSpellHit", result);
         });
     }
 
