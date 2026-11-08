@@ -2414,6 +2414,11 @@ namespace MWWorld
         return mWeatherManager->getTransitionFactor();
     }
 
+    void World::setWeatherSoundGain(float gain)
+    {
+        mWeatherManager->setSoundGain(gain);
+    }
+
     unsigned int World::getNightDayMode() const
     {
         return mWeatherManager->getNightDayMode();

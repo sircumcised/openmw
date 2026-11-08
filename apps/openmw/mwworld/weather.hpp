@@ -1,6 +1,7 @@
 #ifndef GAME_MWWORLD_WEATHER_H
 #define GAME_MWWORLD_WEATHER_H
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -351,6 +352,9 @@ namespace MWWorld
 
         float getTransitionFactor() const { return mTransitionFactor; }
 
+        // NerevarMoon: Lua multiplier on the weather ambient and rain loops, clamped to [0, 1]
+        void setSoundGain(float g) { mSoundGain = std::clamp(g, 0.f, 1.f); }
+
         bool useTorches(float hour) const;
 
         float getSunPercentage(float hour) const;
@@ -405,6 +409,7 @@ namespace MWWorld
         int mQueuedWeather;
         std::map<ESM::RefId, RegionWeather> mRegions;
         MWRender::WeatherResult mResult;
+        float mSoundGain = 1.f;
 
         MWBase::Sound* mAmbientSound{ nullptr };
         ESM::RefId mPlayingAmbientSoundID;
