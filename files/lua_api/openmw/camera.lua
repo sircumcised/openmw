@@ -151,7 +151,13 @@
 -- @param openmw.util#Vector3 offset (or nil)
 -- @param #boolean followRotation (optional, false by default)
 -- @param #number stabilization (optional, 0 by default) 0..1: share of the head's walk and run sway relative to
--- the body that is filtered out (0.1 s low pass); not applied while followRotation is on.
+-- the body that is filtered out (low pass of filterTime seconds); not applied while followRotation is on.
+-- @param #number filterTime (optional, 0.1 by default) seconds of the low pass, 0.02..1. A step takes about 0.47 s:
+-- 0.1 s removes 30-40% of the sway at stabilization 1, 0.3 s about 50%, 0.6 s about 60%.
+
+---
+-- NerevarMoon engine only: true when @{#camera.setStaticHeadTracking} takes the filterTime argument.
+-- @field [parent=#camera] #boolean staticHeadFilterTime
 
 ---
 -- NerevarMoon engine only: true when @{#camera.setStaticHeadTracking} exists (nil in stock OpenMW).
