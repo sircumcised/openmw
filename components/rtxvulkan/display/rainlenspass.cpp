@@ -61,7 +61,7 @@ namespace Rtx
     void RainLensPass::record(const VkCommandBuffer commands, const RainLens& rain, const Image& source,
         const Image& target, const VkExtent2D extent, GpuTimer* timer) const
     {
-        const GpuZone timed(timer, commands, FrameZone::Tone);
+        const GpuZone timed(timer, commands, FrameZone::RainLens);
 
         source.transition(commands, Use::sComputeWrite, Use::sComputeSample);
 

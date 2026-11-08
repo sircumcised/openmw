@@ -66,6 +66,9 @@ namespace Rtx
         Exposure,
         Glare,
         Tone,
+
+        /// NerevarMoon: the rain streaks on the lens after the curve (`RainLensPass`).
+        RainLens,
         Lines,
         Digest,
 
@@ -116,6 +119,7 @@ namespace Rtx
         std::pair{ FrameZone::Exposure, std::string_view("exposure") },
         std::pair{ FrameZone::Glare, std::string_view("glare") },
         std::pair{ FrameZone::Tone, std::string_view("tone") },
+        std::pair{ FrameZone::RainLens, std::string_view("rainlens") },
         std::pair{ FrameZone::Lines, std::string_view("lines") },
         std::pair{ FrameZone::Digest, std::string_view("digest") },
         std::pair{ FrameZone::Stress, std::string_view("stress") },
