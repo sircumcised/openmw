@@ -182,5 +182,7 @@ namespace Rtx
         options.mExposureBias = light.mExposureBias;
         options.mGlare = reading.mSunGlare;
         options.mNightEye = reading.mNightEye;
+        options.mRainStreak = reading.mRainStreak;
+        options.mRainMotion = reading.mRainMotion;
     }
 }

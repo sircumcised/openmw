@@ -109,6 +109,11 @@ namespace Rtx
         /// whole, so a step boundary is read off the clock and not off its split rebuilt. Filled
         /// where the world describes the frame (`describeWorld`).
         double mWaterSeconds = 0.0;
+
+        /// NerevarMoon: the rain streaks on the lens and the camera-space motion that bends them,
+        /// `WorldReading::mRainStreak` and `mRainMotion`, which the display chain draws after the curve.
+        float mRainStreak = 0.0f;
+        osg::Vec2f mRainMotion{};
     };
 
     /// How far the air has been carried downwind since a run began, in world units: the integral

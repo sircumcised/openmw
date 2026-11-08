@@ -77,6 +77,7 @@ namespace Rtx
         , mExposure(device)
         , mSunGlare(device)
         , mTone(device, textureLayout)
+        , mRainLens(device)
         , mLines(device)
     {
     }
@@ -84,6 +85,7 @@ namespace Rtx
     void DisplayChain::resize(const std::uint32_t width, const std::uint32_t height)
     {
         mBloom.resize(width, height);
+        mRainLens.resize(width, height);
     }
 
     void DisplayChain::beginGlare(const VkCommandBuffer commands) const
@@ -210,7 +212,17 @@ namespace Rtx
                 timer);
         };
 
-        toneInto(what.mTarget, constants);
+        // NerevarMoon: on a frame with rain streaks the curve writes the rain lens's own image, and
+        // the lens reads it and writes the target; a frame without them takes the curve's one write.
+        const Image* const rainSource = look != nullptr ? mRainLens.sourceFor(look->mRain, what.mExtent) : nullptr;
+        if (rainSource != nullptr)
+        {
+            rainSource->transition(commands, Use::sUndefined, Use::sComputeWrite);
+            toneInto(*rainSource, constants);
+            mRainLens.record(commands, look->mRain, *rainSource, what.mTarget, what.mExtent, timer);
+        }
+        else
+            toneInto(what.mTarget, constants);
 
         // **The curve run a second time, because a copy of the picture would carry its byte**, and
         // the byte is what the second store is there to escape: a summed frame's mean falls between
