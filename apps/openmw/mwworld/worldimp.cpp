@@ -1693,7 +1693,8 @@ namespace MWWorld
         }
         const std::vector<MWPhysics::RagdollBone> bones = animation->getRagdollBones();
 
-        // The blow: from the last attacker towards the victim, harder for a charged attack
+        // The blow: from the last attacker towards the victim, harder for a charged attack. JoltWorld::addRagdoll
+        // spreads it over the whole body for a death (08/11/2026): on the chest alone it only folded the corpse.
         osg::Vec3f impulse(0.f, 0.f, 60.f);
         const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
         const Ptr attacker = mWorldModel.getPtr(stats.getHitAttemptActor());

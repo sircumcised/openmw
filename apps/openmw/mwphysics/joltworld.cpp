@@ -46,6 +46,7 @@ namespace MWPhysics
         constexpr std::size_t sMaxRagdolls = 8;
         constexpr float sRagdollTimeout = 6.f; // seconds before a fall is frozen anyway
         constexpr float sLandingSpeed = 150.f; // units/s
+        constexpr float sDeathBlowSpread = 0.7f; // share of the killing blow given to every body besides the chest
         constexpr float sRollTime = 0.9f; // seconds
         constexpr float sRollDone = 0.8f; // chest facing z where the body lies on its back
         constexpr float sRollSpeed = 10.f; // rad/s about the pelvis-head axis
@@ -500,8 +501,12 @@ namespace MWPhysics
                     velocity = (bone.mWorld.getTrans() - bone.mWorldPrev.getTrans()) * invDt;
             if (velocity.length() > 1000.f)
                 velocity *= 1000.f / velocity.length();
+            // The blow lands on the chest. A killing blow also carries the other bodies at 0.7 (08/11/2026): on the
+            // chest alone the corpse folded and slid 1.2 m, now it flies 3-5 m. A knockdown keeps the chest-only hit.
             if (static_cast<int>(i) == build.mChest)
                 velocity += impulse;
+            else if (mode == RagdollMode::Death)
+                velocity += impulse * sDeathBlowSpread;
             mImpl->bodies().SetLinearVelocity(ragdoll->GetBodyID(static_cast<int>(i)),
                 JPH::Vec3(velocity.x(), velocity.y(), velocity.z()) / sJoltUnitsPerMetre);
         }
