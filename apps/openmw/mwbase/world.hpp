@@ -234,6 +234,8 @@ namespace MWBase
 
         virtual float getWeatherTransition() const = 0;
 
+        virtual void setWeatherSoundGain(float gain) = 0;
+
         virtual unsigned int getNightDayMode() const = 0;
 
         virtual int getMasserPhase() const = 0;

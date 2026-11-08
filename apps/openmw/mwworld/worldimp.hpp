@@ -368,6 +368,8 @@ namespace MWWorld
 
         float getWeatherTransition() const override;
 
+        void setWeatherSoundGain(float gain) override;
+
         unsigned int getNightDayMode() const override;
 
         int getMasserPhase() const override;
