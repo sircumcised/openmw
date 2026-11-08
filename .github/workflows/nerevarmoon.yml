@@ -23,6 +23,7 @@ on:
       - nm-jolt
       - nm-lua
       - nm-bodyview-aim
+      - nm-rain
 
 jobs:
   Windows:
