@@ -36,5 +36,21 @@ namespace MWRender
                     | Rtx::Shaders::MASK_PARTICLE);
             EXPECT_TRUE(hidden.mLamps);
         }
+
+        /// **The hidden head is a class of its own, and no view's ray mask asks for it.**
+        /// NerevarMoon's Bodyview hides the player's head under `Mask_PlayerHidden`, which the eye's
+        /// cull mask leaves out; the tracer walks it anyway and stands it shadow-only
+        /// (`Rtx::InstanceClass::ShadowOnly`). Its bit is the sprites' camera bit, so `describeView`
+        /// never sets it for the class: a view that keeps the hidden parts asks no sprites for them.
+        TEST(MWRenderClassMasksTest, theHiddenHeadIsShadowOnlyAndNoViewAsksForItsBit)
+        {
+            const auto shadowOnly = std::find_if(sClassMasks.begin(), sClassMasks.end(),
+                [](const ClassMask& held) { return held.mClass == Rtx::InstanceClass::ShadowOnly; });
+            ASSERT_NE(shadowOnly, sClassMasks.end());
+            EXPECT_EQ(shadowOnly->mNodes, Mask_PlayerHidden);
+
+            EXPECT_EQ(describeView(Mask_Scene | Mask_PlayerHidden).mRayMask, 0u);
+            EXPECT_EQ(describeView(~0u).mRayMask, describeView(~static_cast<unsigned int>(Mask_PlayerHidden)).mRayMask);
+        }
     }
 }

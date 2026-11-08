@@ -423,8 +423,8 @@ namespace Rtx
             InstanceClass mClass;
             osg::Node::NodeMask mMask = 0;
         };
-        std::array<ClassMask, 3> mClassMasks{ ClassMask{ InstanceClass::Actor }, ClassMask{ InstanceClass::Effect },
-            ClassMask{ InstanceClass::FirstPerson } };
+        std::array<ClassMask, 4> mClassMasks{ ClassMask{ InstanceClass::Actor }, ClassMask{ InstanceClass::Effect },
+            ClassMask{ InstanceClass::FirstPerson }, ClassMask{ InstanceClass::ShadowOnly } };
 
         /// See `setEye`.
         std::optional<ViewBasis> mEye;

@@ -135,15 +135,16 @@ namespace MWRender
         /// a walk that went on past an actor would stand it in the class the player keeps on.
         constexpr osg::Node::NodeMask worldTraversal(const unsigned int view)
         {
-            // NerevarMoon: Bodyview hides the player's head with Mask_PlayerHidden
-            constexpr osg::Node::NodeMask walkedByView = Mask_Player | Mask_Actor | Mask_PlayerHidden;
+            constexpr osg::Node::NodeMask walkedByView = Mask_Player | Mask_Actor;
 
             return sWorldTraversal & ~(walkedByView & ~view);
         }
 
-        // NerevarMoon: Bodyview hides the player's head with Mask_PlayerHidden, which the eye's view mask leaves out
-        static_assert((worldTraversal(~static_cast<unsigned int>(Mask_PlayerHidden)) & Mask_PlayerHidden) == 0,
-            "a view that leaves out Mask_PlayerHidden must not walk it");
+        // NerevarMoon: Bodyview hides the player's head with Mask_PlayerHidden, which the eye's view mask leaves
+        // out; the walk still reaches it and stands it shadow-only (`Rtx::InstanceClass::ShadowOnly`), so the eye
+        // misses it and its shadow stays on the ground.
+        static_assert((worldTraversal(~static_cast<unsigned int>(Mask_PlayerHidden)) & Mask_PlayerHidden) != 0,
+            "a view that leaves out Mask_PlayerHidden still walks it: the tracer places it shadow-only");
     }
 
     WorldMirror::WorldMirror(const MirrorKnobs& knobs)

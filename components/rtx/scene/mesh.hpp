@@ -62,6 +62,9 @@ namespace Rtx
         Actor,
         Effect,
         FirstPerson,
+        /// NerevarMoon: the player's head that Bodyview hides (`Mask_PlayerHidden`), met by every
+        /// ray but the eye's — `Shaders::MASK_SHADOW_ONLY`.
+        ShadowOnly,
     };
 
     /// The instance-mask bit a class is placed with. Water stands in for the class where the
@@ -76,6 +79,8 @@ namespace Rtx
                 return Shaders::MASK_EFFECT;
             case InstanceClass::FirstPerson:
                 return Shaders::MASK_FIRST_PERSON;
+            case InstanceClass::ShadowOnly:
+                return Shaders::MASK_SHADOW_ONLY;
             case InstanceClass::Static:
                 break;
         }

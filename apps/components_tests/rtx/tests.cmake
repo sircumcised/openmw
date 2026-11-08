@@ -81,6 +81,7 @@ set(RTX_TEST_FILES
     rtx/scene/scenetextures.cpp
     rtx/shaders/brdf.cpp
     rtx/shaders/lights.cpp
+    rtx/shaders/masks.cpp
     rtx/shaders/pixelgrid.cpp
     rtx/shaders/sharedconstants.cpp
     rtx/shaders/tangent.cpp

@@ -8,7 +8,8 @@ namespace MWRender
     {
         std::uint32_t mask = 0;
         for (const ClassMask& held : sClassMasks)
-            if ((cullMask & held.mNodes) != 0)
+            // NerevarMoon: the shadow-only class rides on the sprite bit, which only `Mask_ParticleSystem` sets
+            if (held.mClass != Rtx::InstanceClass::ShadowOnly && (cullMask & held.mNodes) != 0)
                 mask |= Rtx::classBit(held.mClass);
 
         if ((cullMask & (Mask_Water | Mask_SimpleWater)) != 0)

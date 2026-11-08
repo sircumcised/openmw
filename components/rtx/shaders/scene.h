@@ -393,6 +393,16 @@ namespace Rtx::Shaders
     /// rasterizer's `Mask_ParticleSystem`, which a map tile's camera leaves out.
     const uint MASK_PARTICLE = 0x40u;
 
+    /// NerevarMoon: the player's head, hair and helmet that Bodyview hides from the eye
+    /// (`Mask_PlayerHidden`), which still has to shadow the ground and show in the water. **The
+    /// same bit as `MASK_PARTICLE`, because the eight are taken**: on a camera it says the sprites
+    /// are drawn, on an instance it says every ray but the eye's meets it. `worldMask` drops it and
+    /// `solidMask` keeps it, so the eye, the fog depth and the sprite composite never see the head
+    /// and the sun's, the moons' and the lamps' shadow rays, the bounces and the water's rays do.
+    /// A camera that draws no sprites casts no shadow of a hidden head either, and no such camera
+    /// has a player in it.
+    const uint MASK_SHADOW_ONLY = MASK_PARTICLE;
+
     /// A surface that adds to the frame and covers nothing — `Rtx::Material::isAdditive`: a
     /// magic effect's sheet, the Heart of Lorkhan's, the ice wall's. **The last bit, and alone on
     /// its instance.** The eye's trace, the shadow rays, the bounces, the water's rays and the
@@ -406,20 +416,21 @@ namespace Rtx::Shaders
         = MASK_STATIC | MASK_WATER | MASK_FIRST_PERSON | MASK_ACTOR | MASK_EFFECT | MASK_PARTICLE;
 
     /// What every ray but the eye's own casts with: what the camera draws, less the arms
-    /// (`MASK_FIRST_PERSON`), less the water (`MASK_WATER`) which shadows nothing, less the
-    /// particles, which are sprites and not instances.
+    /// (`MASK_FIRST_PERSON`), less the water (`MASK_WATER`) which shadows nothing. The sprite
+    /// bit stays: the sprites are not instances, and on an instance it is `MASK_SHADOW_ONLY`.
     RTX_SHADER uint solidMask(uint rayMask)
     {
-        return rayMask & ~(MASK_FIRST_PERSON | MASK_WATER | MASK_PARTICLE);
+        return rayMask & ~(MASK_FIRST_PERSON | MASK_WATER);
     }
 
     /// What the world's own eye ray casts with: what the camera draws, less the arms, which are
     /// the arms' eye's alone — `Eyes::mArms`. The rasterizer draws them under a
     /// projection of their own and clears the depth under them, so they stand in front of
-    /// everything; here they are traced first, and the world's ray never meets them.
+    /// everything; here they are traced first, and the world's ray never meets them. Less the
+    /// shadow-only instances (`MASK_SHADOW_ONLY`), which the eye is the one ray to miss.
     RTX_SHADER uint worldMask(uint rayMask)
     {
-        return rayMask & ~MASK_FIRST_PERSON;
+        return rayMask & ~(MASK_FIRST_PERSON | MASK_SHADOW_ONLY);
     }
 
     /// What shelters a falling sprite: the statics and the objects, and nothing that moves. The

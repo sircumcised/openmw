@@ -21,12 +21,14 @@ namespace MWRender
     /// The one mapping from the game's masks to the ray tracer's classes, read both ways:
     /// `describeView` turns a camera's cull mask into the classes its rays meet, and `WorldMirror`
     /// names the roots the walk sorts by. `Static` is what states none of the others, so the walk
-    /// is never told its mask.
-    inline constexpr std::array<ClassMask, 4> sClassMasks{
+    /// is never told its mask. `ShadowOnly` is NerevarMoon's: the head Bodyview hides under
+    /// `Mask_PlayerHidden`, which `describeView` never asks for, because its bit is the sprites'.
+    inline constexpr std::array<ClassMask, 5> sClassMasks{
         ClassMask{ Rtx::InstanceClass::Static, Mask_Object | Mask_Static | Mask_Terrain | Mask_Groundcover },
         ClassMask{ Rtx::InstanceClass::Actor, Mask_Actor | Mask_Player },
         ClassMask{ Rtx::InstanceClass::Effect, Mask_Effect },
         ClassMask{ Rtx::InstanceClass::FirstPerson, Mask_FirstPerson },
+        ClassMask{ Rtx::InstanceClass::ShadowOnly, Mask_PlayerHidden },
     };
 
     /// What a camera's cull mask says to the trace.

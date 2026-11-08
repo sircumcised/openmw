@@ -4,7 +4,7 @@ Branch `nm-rtx`: the tag `rtx-v0.4.5` of xorza/openmw-rtx (OpenMW 0.53, Vulkan r
 
 Lua API added by the fork: `types.Actor.knockDown/isKnockedDown/isKnockedOut`, `types.Actor.setTimeScale/getTimeScale`, `types.Actor.sever/isSevered/isRagdoll/setLowerBodyLocked`, event `NMHitResult`, `animation.getBoneTransform/hasBonePhysics/setHeadHidden`, `animation.addVfx` option `offset`, `camera.setStaticHeadTracking`, `world.physicsImpulse/physicsSetDynamic/isRagdoll`. Engine side: Jolt Physics ragdolls and knockdown (`[Physics] jolt`), dismemberment, bone physics chains (`<model>.physics.yaml`), Bodyview (`Mask_PlayerHidden`), `[Lua] lua timing log`.
 
-Patches to the ray tracer: the eye's view mask and the world walk skip `Mask_PlayerHidden` (`renderingmanager.cpp`, `mwrender/rtx/worldmirror.cpp`); an occluded window keeps the game running (`components/sdlutil/sdlvideowrapper.cpp`).
+Patches to the ray tracer: the eye's view mask skips `Mask_PlayerHidden` (`renderingmanager.cpp`) and the world walk places it as `Rtx::InstanceClass::ShadowOnly` on `MASK_SHADOW_ONLY`, the sprite bit, which the eye's ray drops and every other ray keeps (`mwrender/rtx/classmasks.hpp`, `components/rtx/shaders/scene.h`): the hidden head still shadows the ground; an occluded window keeps the game running (`components/sdlutil/sdlvideowrapper.cpp`).
 
 CI: `.github/workflows/nerevarmoon-rtx.yml` builds the Windows package on every push to `nm-rtx` and publishes the release `nerevarmoon-rtx-build-N`.
 
