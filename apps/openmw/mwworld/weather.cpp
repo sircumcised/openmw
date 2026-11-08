@@ -922,10 +922,10 @@ namespace MWWorld
             mPlayingAmbientSoundID = result.getAmbientLoopSoundID();
             if (!mPlayingAmbientSoundID.empty())
                 mAmbientSound = MWBase::Environment::get().getSoundManager()->playSound(mPlayingAmbientSoundID,
-                    result.mAmbientSoundVolume, 1.0, MWSound::Type::Sfx, MWSound::PlayMode::Loop);
+                    result.mAmbientSoundVolume * mSoundGain, 1.0, MWSound::Type::Sfx, MWSound::PlayMode::Loop);
         }
         else if (mAmbientSound)
-            mAmbientSound->setVolume(result.mAmbientSoundVolume);
+            mAmbientSound->setVolume(result.mAmbientSoundVolume * mSoundGain);
 
         if (mPlayingRainSoundID != result.getRainLoopSoundID())
         {
@@ -936,11 +936,11 @@ namespace MWWorld
             }
             mPlayingRainSoundID = result.getRainLoopSoundID();
             if (!mPlayingRainSoundID.empty())
-                mRainSound = MWBase::Environment::get().getSoundManager()->playSound(
-                    mPlayingRainSoundID, result.mAmbientSoundVolume, 1.0, MWSound::Type::Sfx, MWSound::PlayMode::Loop);
+                mRainSound = MWBase::Environment::get().getSoundManager()->playSound(mPlayingRainSoundID,
+                    result.mAmbientSoundVolume * mSoundGain, 1.0, MWSound::Type::Sfx, MWSound::PlayMode::Loop);
         }
         else if (mRainSound)
-            mRainSound->setVolume(result.mAmbientSoundVolume);
+            mRainSound->setVolume(result.mAmbientSoundVolume * mSoundGain);
     }
 
     void WeatherManager::stopSounds()

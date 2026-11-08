@@ -252,6 +252,8 @@ namespace MWBase
         /// What the weather manager settled about the sky, for whatever draws it.
         virtual const MWRender::SkyState& getSkyState() const = 0;
 
+        virtual void setWeatherSoundGain(float gain) = 0;
+
         virtual unsigned int getNightDayMode() const = 0;
 
         virtual int getMasserPhase() const = 0;

@@ -2442,6 +2442,11 @@ namespace MWWorld
         return mWeatherManager->getSkyState();
     }
 
+    void World::setWeatherSoundGain(float gain)
+    {
+        mWeatherManager->setSoundGain(gain);
+    }
+
     unsigned int World::getNightDayMode() const
     {
         return mWeatherManager->getNightDayMode();

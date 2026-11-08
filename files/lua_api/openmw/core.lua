@@ -1485,6 +1485,11 @@
 -- @return #number Can be nil if the cell is inactive or has no weather
 
 ---
+-- Scale the volume of the weather ambient and rain loops
+-- @function [parent=#Weather] setSoundGain
+-- @param #number gain 0..1 multiplier on the weather ambient and rain loops (NerevarMoon fork)
+
+---
 -- Change the weather
 -- @function [parent=#Weather] changeWeather
 -- @param #string regionId
