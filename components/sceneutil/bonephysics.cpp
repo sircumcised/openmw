@@ -90,46 +90,55 @@ namespace SceneUtil
             return std::nullopt;
         }
         BonePhysicsSpec spec;
-        for (const YAML::Node& it : root["chains"])
+        // a value of the wrong type (damping: abc) throws: the model then loads without bone physics
+        try
         {
-            Chain chain;
-            if (!it["bones"] || !it["bones"].IsSequence() || it["bones"].size() == 0)
+            for (const YAML::Node& it : root["chains"])
             {
-                Log(Debug::Error) << "Bone physics: a chain in '" << sourceName << "' has no 'bones'";
-                continue;
-            }
-            for (const YAML::Node& bone : it["bones"])
-                chain.mBones.push_back(bone.as<std::string>());
-            if (it["tip"])
-                chain.mTip = readVec3(it["tip"], osg::Vec3f());
-            chain.mDamping = readClamped(it["damping"], chain.mDamping, 0.f, 1.f);
-            chain.mElasticity = readClamped(it["elasticity"], chain.mElasticity, 0.f, 1.f);
-            chain.mStiffness = readClamped(it["stiffness"], chain.mStiffness, 0.f, 1.f);
-            chain.mGravity = readClamped(it["gravity"], chain.mGravity, -10.f, 10.f);
-            chain.mInertia = readClamped(it["inertia"], chain.mInertia, 0.f, 1.f);
-            chain.mRadius = readClamped(it["radius"], chain.mRadius, 0.f, 100.f);
-            if (it["world"])
-                chain.mWorld = it["world"].as<bool>();
-            chain.mMaxSpeed = readClamped(it["maxSpeed"], chain.mMaxSpeed, 10.f, 100000.f);
-            chain.mTipMass = readClamped(it["tipMass"], chain.mTipMass, 0.01f, 1000.f);
-            chain.mTipRadius = readClamped(it["tipRadius"], chain.mTipRadius, -1.f, 100.f);
-            if (it["iterations"])
-                chain.mIterations = std::clamp(it["iterations"].as<int>(), 0, 16);
-            spec.mChains.push_back(std::move(chain));
-        }
-        if (root["colliders"])
-        {
-            for (const YAML::Node& it : root["colliders"])
-            {
-                if (!it["bone"])
+                Chain chain;
+                if (!it["bones"] || !it["bones"].IsSequence() || it["bones"].size() == 0)
+                {
+                    Log(Debug::Error) << "Bone physics: a chain in '" << sourceName << "' has no 'bones'";
                     continue;
-                Collider collider;
-                collider.mBone = it["bone"].as<std::string>();
-                collider.mRadius = readClamped(it["radius"], collider.mRadius, 0.f, 500.f);
-                collider.mOffset = readVec3(it["offset"], osg::Vec3f());
-                collider.mEnd = readVec3(it["end"], collider.mOffset);
-                spec.mColliders.push_back(std::move(collider));
+                }
+                for (const YAML::Node& bone : it["bones"])
+                    chain.mBones.push_back(bone.as<std::string>());
+                if (it["tip"])
+                    chain.mTip = readVec3(it["tip"], osg::Vec3f());
+                chain.mDamping = readClamped(it["damping"], chain.mDamping, 0.f, 1.f);
+                chain.mElasticity = readClamped(it["elasticity"], chain.mElasticity, 0.f, 1.f);
+                chain.mStiffness = readClamped(it["stiffness"], chain.mStiffness, 0.f, 1.f);
+                chain.mGravity = readClamped(it["gravity"], chain.mGravity, -10.f, 10.f);
+                chain.mInertia = readClamped(it["inertia"], chain.mInertia, 0.f, 1.f);
+                chain.mRadius = readClamped(it["radius"], chain.mRadius, 0.f, 100.f);
+                if (it["world"])
+                    chain.mWorld = it["world"].as<bool>();
+                chain.mMaxSpeed = readClamped(it["maxSpeed"], chain.mMaxSpeed, 10.f, 100000.f);
+                chain.mTipMass = readClamped(it["tipMass"], chain.mTipMass, 0.01f, 1000.f);
+                chain.mTipRadius = readClamped(it["tipRadius"], chain.mTipRadius, -1.f, 100.f);
+                if (it["iterations"])
+                    chain.mIterations = std::clamp(it["iterations"].as<int>(), 0, 16);
+                spec.mChains.push_back(std::move(chain));
             }
+            if (root["colliders"])
+            {
+                for (const YAML::Node& it : root["colliders"])
+                {
+                    if (!it["bone"])
+                        continue;
+                    Collider collider;
+                    collider.mBone = it["bone"].as<std::string>();
+                    collider.mRadius = readClamped(it["radius"], collider.mRadius, 0.f, 500.f);
+                    collider.mOffset = readVec3(it["offset"], osg::Vec3f());
+                    collider.mEnd = readVec3(it["end"], collider.mOffset);
+                    spec.mColliders.push_back(std::move(collider));
+                }
+            }
+        }
+        catch (const std::exception& e)
+        {
+            Log(Debug::Error) << "Bone physics: bad value in '" << sourceName << "': " << e.what();
+            return std::nullopt;
         }
         if (spec.mChains.empty())
             return std::nullopt;

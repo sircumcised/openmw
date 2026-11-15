@@ -460,6 +460,10 @@ namespace MWWorld
             {
                 ESM::GibState gib;
                 gib.load(reader);
+                // RefNums follow the load order of the save: map them, drop the record if the plugin is gone
+                if (!reader.applyContentFileMapping(gib.mActor)
+                    || (gib.mObject.isSet() && !reader.applyContentFileMapping(gib.mObject)))
+                    return;
                 if (gib.mActor.isSet())
                     mGibs.push_back(std::move(gib));
                 return;
@@ -468,6 +472,8 @@ namespace MWWorld
             {
                 ESM::RagdollState state;
                 state.load(reader);
+                if (!reader.applyContentFileMapping(state.mActor))
+                    return;
                 if (state.mActor.isSet())
                     mRagdollStates[state.mActor] = std::move(state);
                 return;
@@ -1653,6 +1659,11 @@ namespace MWWorld
         for (auto it = mRagdollStates.begin(); it != mRagdollStates.end();)
         {
             const Ptr ptr = mWorldModel.getPtr(it->first);
+            if (!ptr.isEmpty() && ptr.getCellRef().getCount() == 0)
+            {
+                it = mRagdollStates.erase(it); // corpse disposed of: nothing left to pose
+                continue;
+            }
             if (ptr.isEmpty() || !ptr.isInCell() || !ptr.getClass().isActor())
             {
                 ++it;
@@ -1883,8 +1894,14 @@ namespace MWWorld
             return;
         mGibApplyTimer = 0.f;
         // a reloaded actor gets its pieces cut again, a reloaded piece gets the actor's meshes again
-        for (const ESM::GibState& gib : mGibs)
+        std::erase_if(mGibs, [&](const ESM::GibState& gib) {
+            // the actor was disposed of: its cuts are not needed any more
+            const Ptr actor = mWorldModel.getPtr(gib.mActor);
+            if (!actor.isEmpty() && actor.getCellRef().getCount() == 0)
+                return true;
             applyGib(gib);
+            return false;
+        });
     }
 
     void World::applyGib(const ESM::GibState& gib)
@@ -1978,12 +1995,15 @@ namespace MWWorld
 
     bool World::setDynamic(const Ptr& ptr, const std::optional<osg::Vec3f>& velocity)
     {
+        // actors are never dynamic bodies; stopping one here would drop its ragdoll
+        if (ptr.getClass().isActor())
+            return false;
         if (!velocity)
         {
             mPhysics->stopDynamic(ptr);
             return true;
         }
-        if (!physicsAvailable() || ptr.getClass().isActor() || !ptr.isInCell())
+        if (!physicsAvailable() || !ptr.isInCell())
             return false;
         osg::Group* node = ptr.getRefData().getBaseNode() ? ptr.getRefData().getBaseNode()->asGroup() : nullptr;
         if (!node)

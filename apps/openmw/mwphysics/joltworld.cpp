@@ -590,6 +590,8 @@ namespace MWPhysics
         dropRagdoll(ptr);
         mImpl->removeStatic(ptr.mRef);
         mImpl->removeDynamic(ptr.mRef);
+        // a piece stopped by the cap waits for the next step: it must not outlive its object (cell unload, load)
+        std::erase_if(mImpl->mStopped, [&](const Moved& stopped) { return stopped.mPtr.mRef == ptr.mRef; });
     }
 
     void JoltWorld::updatePtr(const MWWorld::Ptr& old, const MWWorld::Ptr& updated)
@@ -598,6 +600,12 @@ namespace MWPhysics
         {
             if (auto found = mImpl->mDynamics.find(old.mRef); found != mImpl->mDynamics.end())
                 found->second.mPtr = updated;
+            // a ragdoll that slid into another cell keeps its entry: its Ptr must name the new cell
+            if (auto found = mImpl->mRagdolls.find(old.mRef); found != mImpl->mRagdolls.end())
+                found->second.mPtr = updated;
+            for (Moved& stopped : mImpl->mStopped)
+                if (stopped.mPtr.mRef == old.mRef)
+                    stopped.mPtr = updated;
             return;
         }
         if (auto found = mImpl->mStatics.find(old.mRef); found != mImpl->mStatics.end())

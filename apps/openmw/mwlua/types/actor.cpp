@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <stdexcept>
 
 #include <components/detournavigator/agentbounds.hpp>
 #include <components/lua/luastate.hpp>
@@ -540,8 +542,14 @@ namespace MWLua
                              sol::optional<sol::table> options) {
             if (!MWRender::parsePiece(piece))
                 throw std::runtime_error("Unknown piece: " + std::string(piece));
+            if (impulse
+                && (!std::isfinite(impulse->x()) || !std::isfinite(impulse->y()) || !std::isfinite(impulse->z())))
+                throw std::runtime_error("sever: impulse must be a finite vector");
             const MWWorld::Ptr& ptr = o.ptr();
             if (!ptr.getClass().isActor() || ptr == MWBase::Environment::get().getWorld()->getPlayerPtr())
+                return false;
+            // true means "queued": the cut runs at the end of the frame, isSevered then tells whether it happened
+            if (MWBase::Environment::get().getWorld()->isSevered(ptr, piece))
                 return false;
             const bool crushed = options && options->get_or("crushed", false);
             const bool silent = options && options->get_or("silent", false);

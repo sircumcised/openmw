@@ -1,5 +1,8 @@
 #include "worldbindings.hpp"
 
+#include <cmath>
+#include <stdexcept>
+
 #include <components/debug/debuglog.hpp>
 #include <components/esm3/loadacti.hpp>
 #include <components/settings/values.hpp>
@@ -272,7 +275,11 @@ namespace MWLua
         api["physicsSetDynamic"] = [context](const GObject& object, sol::optional<osg::Vec3f> velocity) {
             std::optional<osg::Vec3f> v;
             if (velocity)
+            {
+                if (!std::isfinite(velocity->x()) || !std::isfinite(velocity->y()) || !std::isfinite(velocity->z()))
+                    throw std::runtime_error("physicsSetDynamic: velocity must be a finite vector");
                 v = *velocity;
+            }
             context.mLuaManager->addAction(
                 [object, v] {
                     const MWWorld::Ptr& ptr = object.ptr();
@@ -288,6 +295,8 @@ namespace MWLua
         };
         api["physicsImpulse"]
             = [context](const GObject& actor, const osg::Vec3f& impulse, sol::optional<std::string> bone) -> bool {
+            if (!std::isfinite(impulse.x()) || !std::isfinite(impulse.y()) || !std::isfinite(impulse.z()))
+                throw std::runtime_error("physicsImpulse: impulse must be a finite vector");
             const MWWorld::Ptr& ptr = actor.ptr();
             if (!ptr.getClass().isActor()
                 || !(ptr.getClass().getCreatureStats(ptr).isDead()
